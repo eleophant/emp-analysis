@@ -22,6 +22,7 @@ load(file = "emp_analysis_rda_2024_06_18.RData")
 df_otus = df_otus |> as.data.frame()
 
 # subsampling ----
+# _ dfs ----
 df_obs_n = df_metadata |> 
   group_by(host_species) |> 
   summarise(n = n()) |> 
@@ -43,6 +44,19 @@ df_otus_sub = df_otus[common_samples_sub, , drop = FALSE]
 df_otus_sub = df_otus_sub |> as.data.frame() |> select(where(~ sum(.) != 0)) |> #remove columns (OTUs that are 0 everywhere)
   as.matrix()
 
+# _ phyloseq ----
+#set up metadata & otu table
+p_metadata_sub = sample_data(df_metadata_sub)
+p_otu_sub = otu_table(df_otus_sub, taxa_are_rows = FALSE)
+
+# check that sample names match
+sample_names(p_metadata_sub)
+sample_names(p_otu_sub)
+
+# assemble phyloseq object
+physeq_sub = phyloseq(p_otu_sub, p_metadata_sub, p_tax) #works!
+ps_sub = merge_phyloseq(physeq_sub, tree_emp)
+
 # subset classes ----
 # mammals
 df_metadata_sub_mammals = df_metadata_sub |>
@@ -60,6 +74,10 @@ df_otus_sub_birds = df_otus_sub_birds[common_samples_sub_birds, , drop = FALSE]
 df_otus_sub_birds = df_otus_sub_birds |> as.data.frame() |> select(where(~ sum(.) != 0)) |> #remove empty columns (OTUs that are 0 everywhere)
   as.matrix()
 
+# phyloseq
+ps_mammals_sub = subset_samples(ps_sub, host_class == "c__Mammalia")
+ps_birds_sub = subset_samples(ps_sub, host_class == "c__Aves")
+
 # descriptive stats ----
 # total number of reads
 df_otus_sub |> sum() #12,950,659
@@ -72,8 +90,7 @@ sd(rowSums(df_otus_sub)) #23,192.04
 df_otus_sub |> as.data.frame() |> ncol() #34,482
 
 
-## TODO ----
-# relative abundances ---- 
+## TODO relative abundances ---- 
 # normalize number of reads using median sequencing depth
 total = median(sample_sums(ps))
 standf = function(x, t = total) round(t * (x / sum(x)))
@@ -97,8 +114,19 @@ fantaxtic::top_taxa(ps_mammals, n = 5, tax_level = "class")
 fantaxtic::top_taxa(ps_birds, n = 3, tax_level = "phylum")
 fantaxtic::top_taxa(ps_birds, n = 5, tax_level = "class")
 
-## TODO ----
-# alpha div ----
+## TODO alpha div ----
+# per host class
+df_metadata |> 
+  filter(host_class != "c__Reptilia") |> 
+  ggplot(aes(x = host_class, y = adiv_faith_pd)) +
+  geom_boxplot() +
+  xlab("Host class") +
+  ylab("Faith PD") +
+  scale_x_discrete(labels=c("c__Aves" = "Aves", "c__Mammalia" = "Mammalia"))
+
+# statistical tests
+kruskal.test(df_metadata_mb$adiv_faith_pd, df_metadata_mb$host_class) #p = 1.108e-06
+summary(glm(df_metadata_mb$adiv_chao1 ~ df_metadata_mb$host_class)) #p = 8.28e-07
 
 
 # db-RDA ----
