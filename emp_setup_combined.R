@@ -1,29 +1,28 @@
-##***************************
-## chapter 1: emp & sociability
-##
-## elt feat. kc
-##
-## 2023-11-24
-##
-##***************************
+#### 
+#
+# emp setup
+#
+# elt feat. kc
+#
+####
 
-## startup packages ----
+## packages ----
 # packages for converting biom to df
-library(tidyverse)
 library(biomformat)
-library(conflicted)
+library(tidyverse)
+#library(conflicted)
 
-# packages for analysis
-library(microbiome)
-library(vegan)
-library(viridis)
-theme_set(theme_bw())
+# packages for analysis # GET RID OF THESE FOR SETUP?
+#library(microbiome)
+#library(vegan)
+#library(viridis)
+#theme_set(theme_bw())
 
 ## biom to df conversion ----
 
 emp = read_biom("emp_cr_silva_16S_123.subset_2k.biom")
 
-## manipulations to use in R
+# manipulations to use in R
 # convert the biom (sparse) into a matrix (dense = zeroes are added in)
 df_otu_emp = 
   emp |> 
@@ -210,11 +209,10 @@ metadata = metadata |>
 
 p_metadata = sample_data(metadata)
 
-# attempt at making metadata with sample_id as row names
 # currently, sample_names(p_metadata_social) returns sa1, sa2, ...
-# try assign first column as row names
+# assign first column (sample_id) to row names
 row.names(p_metadata) = p_metadata$sample_id
-#sample_names(p_metadata_social) # matches sample_names(p_otu)!
+#sample_names(p_metadata_social) now matches sample_names(p_otu)!
 
 
 # _tax_table ----
@@ -256,15 +254,9 @@ head(taxa_names(ps))
 phy_tree(tree_emp)
 ## everything checks out!
 
-## updating phyloseq metadata ----
+## update metadata ----
 # change metadata to df with basic_diet column
 p_metadata = sample_data(metadata)
 row.names(p_metadata) = p_metadata$sample_id
 sample_data(ps) = p_metadata
 colnames(sample_data(ps)) #basic_diet is there!
-
-## subsetting phyloseq object ----
-ps_mammals = subset_samples(ps, host_class == "c__Mammalia")
-ps_birds = subset_samples(ps, host_class == "c__Aves")
-ps_phylum = tax_glom(ps, taxrank = "phylum", NArm = FALSE)
-
