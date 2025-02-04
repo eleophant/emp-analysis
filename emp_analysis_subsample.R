@@ -117,7 +117,6 @@ df_metadata_sub |> group_by(host_species) |>
   summarise(n = n()) |> print(n = 100) #across 45 species
 df_otus_sub |> as.data.frame() |> ncol() #34,482
 
-
 # _ mammals ----
 df_metadata_sub_mammals |> nrow() #312 samples
 df_metadata_sub_mammals |> group_by(host_species) |> 
@@ -443,116 +442,124 @@ print(step_r2_all)
 rda_sp_mammals = capscale(formula = df_otus_sub_mammals ~ host_species, data = df_metadata_sub_mammals,  distance = "robust.aitchison", na.action = na.exclude)
 aov_rda_sp_mammals = anova(rda_sp_mammals)
 print(aov_rda_sp_mammals) #p = 0.001
-RsquareAdj(rda_sp_mammals) #R^2 = 0.02287834
+RsquareAdj(rda_sp_mammals) #adj R^2 = 0.07303849
 
 # by diet
 rda_diet_mammals = capscale(formula = df_otus_sub_mammals ~ basic_diet, data = df_metadata_sub_mammals,  distance = "robust.aitchison", na.action = na.exclude)
 aov_rda_diet_mammals = anova(rda_diet_mammals)
 print(aov_rda_diet_mammals) #p = 0.001 
-RsquareAdj(rda_diet_mammals) #R^2 = 0.003841225
+RsquareAdj(rda_diet_mammals) #adj R^2 = 0.008275982
 
 # by sociality
 rda_social_mammals = capscale(formula = df_otus_sub_mammals ~ basic_sociality, data = df_metadata_sub_mammals,  distance = "robust.aitchison", na.action = na.exclude)
 aov_rda_social_mammals = anova(rda_social_mammals)
 print(aov_rda_social_mammals) #p = 0.001 
-RsquareAdj(rda_social_mammals)  #R^2 = 0.0142302
+RsquareAdj(rda_social_mammals) #adj R^2 = 0.02098
 
-# TODO_ model selection ----
-# run null and full models
+# model selection ----
 mod0_mammals = capscale(df_otus_sub_mammals ~ 1, data = df_metadata_sub_mammals, na.action = na.exclude)
-mod1_mammals = capscale(formula = df_otus_sub_mammals ~ species + diet + sociality, data = df_metadata_sub_mammals,  distance = "robust.aitchison", na.action = na.exclude)
+mod1_mammals = capscale(formula = df_otus_sub_mammals ~ host_species + basic_diet + basic_sociality, data = df_metadata_sub_mammals,  distance = "robust.aitchison", na.action = na.exclude) #some collinearity
 
 # ordistep
 step_r2_mammals = ordiR2step(mod0_mammals, scope = formula(mod1_mammals), perm.max = 200, na.action = na.exclude)
 print(step_r2_mammals)
-
 
 # _ birds ----
 # by species
 rda_sp_birds = capscale(formula = df_otus_sub_birds ~ host_species, data = df_metadata_sub_birds,  distance = "robust.aitchison", na.action = na.exclude)
 aov_rda_sp_birds = anova(rda_sp_birds)
 print(aov_rda_sp_birds) #p = 0.001
-RsquareAdj(rda_sp_birds)  #R^2 = 0.1229736
+RsquareAdj(rda_sp_birds) #ajd R^2 = 0.1229736
 
 # by diet
 rda_diet_birds = capscale(formula = df_otus_sub_birds ~ basic_diet, data = df_metadata_sub_birds,  distance = "robust.aitchison", na.action = na.exclude)
 aov_rda_diet_birds = anova(rda_diet_birds)
 print(aov_rda_diet_birds) #p = 0.001
-RsquareAdj(rda_diet_birds)  #R^2 = 0.0224344
+RsquareAdj(rda_diet_birds) #adj R^2 = 0.0224344
 
 # by sociality
 rda_social_birds = capscale(formula = df_otus_sub_birds ~ basic_sociality, data = df_metadata_sub_birds,  distance = "robust.aitchison", na.action = na.exclude)
 aov_rda_social_birds = anova(rda_social_birds)
-print(aov_rda_social_birds) #p = 0.017
-RsquareAdj(rda_social_birds)  #R^2 = 0.02076328
-
+print(aov_rda_social_birds) #p = 0.012
+RsquareAdj(rda_social_birds) #adj R^2 = 0.02076328
 
 # _ model selection ----
 # run null and full models
 mod0_birds = capscale(df_otus_sub_birds ~ 1, data = df_metadata_sub_birds, na.action = na.exclude)
-mod1_birds = capscale(formula = df_otus_sub_birds ~ species + diet + sociality, data = df_metadata_sub_birds,  distance = "robust.aitchison", na.action = na.exclude)
+mod1_birds = capscale(formula = df_otus_sub_birds ~ host_species + basic_diet + basic_sociality, data = df_metadata_sub_birds,  distance = "robust.aitchison", na.action = na.exclude)
 
 # ordistep
 step_r2_birds = ordiR2step(mod0_birds, scope = formula(mod1_birds), perm.max = 200, na.action = na.exclude)
 print(step_r2_birds)
-
-save.image("emp_analysis_rda_2024_11_01a.RData")
 
 # plot rda ----
 # _ all hosts ----
 df_metadata_sub = df_metadata_sub |> rownames_to_column() |> rename("sample_id" = "rowname")
 
 # species
-rda_scores_sp <- scores(rda_sp_all, display = "sites") # extract the site scores
-rda_scores_sp_df <- as.data.frame(rda_scores_sp)
-rda_scores_sp_df$sample_id <- rownames(rda_scores_sp_df) # add a study_id column
-rda_fort_sp_all <- rda_scores_sp_df |> 
+rda_scores_sp = scores(rda_sp_all, display = "sites") # extract the site scores
+rda_scores_sp_df = as.data.frame(rda_scores_sp)
+rda_scores_sp_df$sample_id = rownames(rda_scores_sp_df) # add a study_id column
+rda_fort_sp_all = rda_scores_sp_df |> 
   left_join(df_metadata_sub, by = "sample_id") # join to metadata
 
 # diet
-rda_scores_diet <- scores(rda_diet_all, display = "sites")
-rda_scores_diet_df <- as.data.frame(rda_scores_diet)
-rda_scores_diet_df$sample_id <- rownames(rda_scores_diet_df)
-rda_fort_diet_all <- rda_scores_diet_df |> 
+rda_scores_diet = scores(rda_diet_all, display = "sites")
+rda_scores_diet_df = as.data.frame(rda_scores_diet)
+rda_scores_diet_df$sample_id = rownames(rda_scores_diet_df)
+rda_fort_diet_all = rda_scores_diet_df |> 
   left_join(df_metadata_sub, by = "sample_id")
 
 # sociality
-rda_scores_social <- scores(rda_social_all, display = "sites")
-rda_scores_social_df <- as.data.frame(rda_scores_social)
-rda_scores_social_df$sample_id <- rownames(rda_scores_social_df)
-rda_fort_social_all <- rda_scores_social_df |> 
+rda_scores_social = scores(rda_social_all, display = "sites")
+rda_scores_social_df = as.data.frame(rda_scores_social)
+rda_scores_social_df$sample_id = rownames(rda_scores_social_df)
+rda_fort_social_all = rda_scores_social_df |> 
   left_join(df_metadata_sub, by = "sample_id")
 
+# TODO ----
 # plots
-p_sp_all = ggplot(rda_fort_sp_all, aes(x = CAP1, y = CAP2, colour = host_species)) +
-  geom_point() + theme(legend.position="none")
-p_diet_all = ggplot(rda_fort_diet_all, aes(x = CAP1, y = CAP2, colour = basic_diet)) +
-  geom_point()
-p_social_all = ggplot(rda_fort_social_all, aes(x = CAP1, y = CAP2, colour = host_class)) +
-  geom_point()+ theme(legend.position="none")
+rda_fort_sp_all |> 
+  ggplot(aes(x = CAP1, y = CAP2, colour = host_species)) +
+  geom_point() +
+  theme(text = element_text(size = 14))
+
+rda_fort_diet_all |> 
+  ggplot(aes(x = CAP1, y = CAP2, colour = basic_diet)) +
+  geom_point() +
+  theme(text = element_text(size = 14))
+
+rda_fort_social_all |> 
+  ggplot(aes(x = CAP1, y = CAP2, colour = host_class)) +
+  geom_point() +
+  theme(text = element_text(size = 14))
+
+p_sp_all
+p_diet_all
+p_social_all
 
 # _ mammals ----
 df_metadata_sub_mammals = df_metadata_sub_mammals |> rownames_to_column() |> rename("sample_id" = "rowname")
 
 # species
-rda_scores_sp_mammals <- scores(rda_sp_mammals, display = "sites")
-rda_scores_sp_mammals_df <- as.data.frame(rda_scores_sp_mammals)
-rda_scores_sp_mammals_df$sample_id <- rownames(rda_scores_sp_mammals_df)
-rda_fort_sp_mammals_all <- rda_scores_sp_mammals_df |> 
+rda_scores_sp_mammals = scores(rda_sp_mammals, display = "sites")
+rda_scores_sp_mammals_df = as.data.frame(rda_scores_sp_mammals)
+rda_scores_sp_mammals_df$sample_id = rownames(rda_scores_sp_mammals_df)
+rda_fort_sp_mammals_all = rda_scores_sp_mammals_df |> 
   left_join(df_metadata_sub_mammals, by = "sample_id")
 
 # diet
-rda_scores_diet_mammals <- scores(rda_diet_mammals, display = "sites")
-rda_scores_diet_mammals_df <- as.data.frame(rda_scores_diet_mammals)
-rda_scores_diet_mammals_df$sample_id <- rownames(rda_scores_diet_mammals_df)
-rda_fort_diet_mammals_all <- rda_scores_diet_mammals_df |> 
+rda_scores_diet_mammals = scores(rda_diet_mammals, display = "sites")
+rda_scores_diet_mammals_df = as.data.frame(rda_scores_diet_mammals)
+rda_scores_diet_mammals_df$sample_id = rownames(rda_scores_diet_mammals_df)
+rda_fort_diet_mammals_all = rda_scores_diet_mammals_df |> 
   left_join(df_metadata_sub_mammals, by = "sample_id")
 
 # sociality
-rda_scores_social_mammals <- scores(rda_social_mammals, display = "sites")
-rda_scores_social_mammals_df <- as.data.frame(rda_scores_social_mammals)
-rda_scores_social_mammals_df$sample_id <- rownames(rda_scores_social_mammals_df)
-rda_fort_social_mammals <- rda_scores_social_mammals_df |> 
+rda_scores_social_mammals = scores(rda_social_mammals, display = "sites")
+rda_scores_social_mammals_df = as.data.frame(rda_scores_social_mammals)
+rda_scores_social_mammals_df$sample_id = rownames(rda_scores_social_mammals_df)
+rda_fort_social_mammals = rda_scores_social_mammals_df |> 
   left_join(df_metadata_sub_mammals, by = "sample_id")
 
 # plots
@@ -567,24 +574,24 @@ p_social_mammals = ggplot(rda_fort_social_mammals, aes(x = CAP1, y = CAP2, colou
 df_metadata_sub_birds = df_metadata_sub_birds |> rownames_to_column() |> rename("sample_id" = "rowname")
 
 # species
-rda_scores_sp_birds <- scores(rda_sp_birds, display = "sites") # extract the site scores
-rda_scores_sp_df_birds <- as.data.frame(rda_scores_sp_birds)
-rda_scores_sp_df_birds$sample_id <- rownames(rda_scores_sp_df_birds) # add a study_id column
-rda_fort_sp_birds <- rda_scores_sp_df_birds |> 
+rda_scores_sp_birds = scores(rda_sp_birds, display = "sites") # extract the site scores
+rda_scores_sp_df_birds = as.data.frame(rda_scores_sp_birds)
+rda_scores_sp_df_birds$sample_id = rownames(rda_scores_sp_df_birds) # add a study_id column
+rda_fort_sp_birds = rda_scores_sp_df_birds |> 
   left_join(df_metadata_sub_birds, by = "sample_id") # join to metadata
 
 # diet
-rda_scores_diet_birds <- scores(rda_diet_birds, display = "sites")
-rda_scores_diet_df_birds <- as.data.frame(rda_scores_diet_birds)
-rda_scores_diet_df_birds$sample_id <- rownames(rda_scores_diet_df_birds)
-rda_fort_diet_birds <- rda_scores_diet_df_birds |> 
+rda_scores_diet_birds = scores(rda_diet_birds, display = "sites")
+rda_scores_diet_df_birds = as.data.frame(rda_scores_diet_birds)
+rda_scores_diet_df_birds$sample_id = rownames(rda_scores_diet_df_birds)
+rda_fort_diet_birds = rda_scores_diet_df_birds |> 
   left_join(df_metadata_sub, by = "sample_id")
 
 # sociality
-rda_scores_social_birds <- scores(rda_social_birds, display = "sites")
-rda_scores_social_df_birds <- as.data.frame(rda_scores_social_birds)
-rda_scores_social_df_birds$sample_id <- rownames(rda_scores_social_df_birds)
-rda_fort_social_birds <- rda_scores_social_df_birds |> 
+rda_scores_social_birds = scores(rda_social_birds, display = "sites")
+rda_scores_social_df_birds = as.data.frame(rda_scores_social_birds)
+rda_scores_social_df_birds$sample_id = rownames(rda_scores_social_df_birds)
+rda_fort_social_birds = rda_scores_social_df_birds |> 
   left_join(df_metadata_sub_birds, by = "sample_id")
 
 # plots
