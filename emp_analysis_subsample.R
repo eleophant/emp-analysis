@@ -17,11 +17,10 @@ library(lme4)
 library(ALDEx2)
 theme_set(theme_classic())
 filter = dplyr::filter
-theme_set(theme_classic())
+select = dplyr::select
 
 ## file input ----
-load(file = "emp_analysis_data_2025_01_31.RData") #this dataset has been modified to omit 1 reptile species, black bear, colobine primates
-#df_otus = df_otus |> as.data.frame()
+load(file = "emp_analysis_data_2025_02_03.RData") #this dataset has been modified to omit 1 reptile species, black bear, colobine primates
 
 ## subsampling ----
 # _ dfs ----
@@ -43,13 +42,17 @@ df_metadata_sub = df_metadata |>
 
 # subsample otu table
 common_samples_sub = intersect(rownames(mx_otus), rownames(df_metadata_sub))
+
 df_otus_sub = mx_otus |> as.data.frame() |> 
   rownames_to_column() |> 
   filter(rowname %in% common_samples_sub) |> 
   column_to_rownames("rowname") |>
   select(where(~ sum(.) != 0)) #remove empty columns (OTUs that are 0 everywhere)
 
-#mx_otus_sub = df_otus_sub |> as.matrix() #necessary?
+# ensure that row order matches
+df_metadata_sub <- df_metadata_sub |> 
+  slice(match(rownames(df_otus_sub), rownames(.)))
+all(rownames(df_otus_sub) == rownames(df_metadata_sub)) #TRUE
 
 # _ phyloseq ----
 # set up metadata & otu table
@@ -76,6 +79,9 @@ df_otus_sub_mammals = mx_otus |> as.data.frame() |>
   column_to_rownames("rowname") |>
   select(where(~ sum(.) != 0))
 
+# ensure that row order matches
+all(rownames(df_otus_sub_mammals) == rownames(df_metadata_sub_mammals)) #TRUE
+
 # birds
 df_metadata_sub_birds = df_metadata_sub |>
   filter(host_class == "c__Aves")
@@ -86,6 +92,11 @@ df_otus_sub_birds = mx_otus |> as.data.frame() |>
   filter(rowname %in% common_samples_sub_birds) |> 
   column_to_rownames("rowname") |>
   select(where(~ sum(.) != 0))
+
+# ensure that row order matches
+df_metadata_sub_birds = df_metadata_sub_birds |> 
+  slice(match(rownames(df_otus_sub_birds), rownames(df_metadata_sub_birds)))
+all(rownames(df_otus_sub_birds) == rownames(df_metadata_sub_birds)) #TRUE
 
 # phyloseq
 ps_mammals_sub = subset_samples(ps_sub, host_class == "c__Mammalia")
@@ -276,6 +287,122 @@ glm_soc_order = lmer(adiv_faith ~ basic_sociality + (1|host_order), data = df_me
 summary(glm_soc_order)
 jtools::summ(glm_soc_order) #not significant for faith, obs_otus, chao1, shannon
 
+## dissimilarity ----
+# _ mammals ----
+aitchison_mammals = vegdist(df_otus_sub_mammals[,-1], method = "robust.aitchison", pseudocount = 1) #aitchison performs a clr, which only works on positive values: need to assign 1 to counts of 0
+
+# make a table with 3 columns: column id, row id, dissimilarity value
+dissimilarity_table_mammals = bind_cols(t(combn(nrow(df_otus_sub_mammals), 2)), diss = aitchison_mammals)
+
+# assign row numbers to join to dissimilarity table
+df_metadata_sub_mammals = df_metadata_sub_mammals |> mutate(row_number = row_number())
+
+dissimilarity_table_mammals = dissimilarity_table_mammals |>
+  rename(row_number = ...1, column_number = ...2) |>
+  left_join(select(df_metadata_sub_mammals, row_number, host_scientific_name, basic_sociality), by = "row_number") |>
+  rename(host_species_1 = host_scientific_name)
+
+dissimilarity_table_mammals_sp2 = dissimilarity_table_mammals |> 
+  select(column_number, diss) |> 
+  left_join(select(df_metadata_sub_mammals, host_scientific_name, row_number), by = c("column_number" = "row_number")) |> rename(host_species_2 = host_scientific_name)
+
+dissimilarity_table_mammals = dissimilarity_table_mammals |> 
+  full_join(dissimilarity_table_mammals_sp2)
+
+# _ birds ----
+aitchison_birds = vegdist(df_otus_sub_birds[,-1], method = "robust.aitchison", pseudocount = 1)
+
+# make a table with 3 columns: column id, row id, dissimilarity value
+dissimilarity_table_birds = bind_cols(t(combn(nrow(df_otus_sub_birds), 2)), diss = aitchison_birds)
+
+# assign row numbers to join to dissimilarity table
+df_metadata_sub_birds = df_metadata_sub_birds |> mutate(row_number = row_number())
+
+dissimilarity_table_birds = dissimilarity_table_birds |>
+  rename(row_number = ...1, column_number = ...2) |>
+  left_join(select(df_metadata_sub_birds, row_number, host_scientific_name, basic_sociality), by = "row_number") |>
+  rename(host_species_1 = host_scientific_name)
+
+dissimilarity_table_birds_sp2 = dissimilarity_table_birds |> 
+  select(column_number, diss) |> 
+  left_join(select(df_metadata_sub_birds, host_scientific_name, row_number), by = c("column_number" = "row_number")) |> rename(host_species_2 = host_scientific_name)
+
+dissimilarity_table_birds = dissimilarity_table_birds |> 
+  full_join(dissimilarity_table_birds_sp2)
+
+# _ stats ----
+glm_diss_birds = lmer(diss ~ basic_sociality + (1|host_species_1), data = dissimilarity_table_birds)
+summary(glm_diss_birds)
+jtools::summ(glm_diss_birds) #social p = 0.60, solitary 0.46
+
+
+# _ plots ----
+# mammals
+# calculate sample sizes per species
+sample_size_mammals = df_metadata_sub_mammals  |> 
+  group_by(host_scientific_name, basic_sociality) |>
+  summarise(n = n(), .groups = "drop") |>
+  mutate(basic_sociality = fct_relevel(basic_sociality, c("social", "intermediate", "solitary"))) |>
+  arrange(basic_sociality, n) |>  # reorder species first by sociality, then by sample size within each group
+  mutate(host_scientific_name = factor(host_scientific_name, levels = unique(host_scientific_name))) |>
+  rename(host_species_1 = host_scientific_name) |>
+  filter(n != 1) 
+
+diss_mammals = sample_size_mammals |> pull(host_species_1)
+
+# plot dissimilarity values
+dissimilarity_table_mammals |>
+  filter(host_species_1 %in% diss_mammals) |>
+  filter(host_species_1 == host_species_2) |>
+  mutate(
+    basic_sociality = fct_relevel(basic_sociality, "social", "intermediate", "solitary"),
+    host_species_1 = factor(host_species_1, levels = levels(sample_size_mammals$host_species_1)) # ensure order is consistent
+  ) |>
+  ggplot(aes(x = host_species_1, y = diss, fill = basic_sociality)) +
+  geom_boxplot(width = 0.8) +
+  scale_color_viridis(discrete = TRUE, aesthetics = "fill", name = "sociality") +
+  scale_y_continuous(limits = c(0, 140), breaks = seq(0, 140, by = 40)) +
+  geom_text(data = sample_size_mammals, aes(host_species_1, Inf, label = n), hjust = "inward") +
+  labs(x = "host species", y = "dissimilarity (robust Aitchison)") +
+  theme(text = element_text(size = 14),
+        axis.text.y = element_text(face = "italic")) +
+  guides(fill = guide_legend(reverse = TRUE)) +
+  coord_flip()
+
+
+# birds 
+# calculate sample sizes per species
+sample_size_birds = df_metadata_sub_birds  |> 
+  group_by(host_scientific_name, basic_sociality) |>
+  summarise(n = n(), .groups = "drop") |>
+  mutate(basic_sociality = fct_relevel(basic_sociality, c("social", "intermediate", "solitary"))) |>
+  arrange(basic_sociality, n) |>  # reorder species first by sociality, then by sample size within each group
+  mutate(host_scientific_name = factor(host_scientific_name, levels = unique(host_scientific_name))) |>
+  rename(host_species_1 = host_scientific_name) |>
+  filter(n != 1) 
+
+diss_birds = sample_size_birds |> pull(host_species_1)
+
+# plot dissimilarity values
+dissimilarity_table_birds |>
+  filter(host_species_1 %in% diss_birds) |>
+  filter(host_species_1 == host_species_2) |>
+  mutate(
+    basic_sociality = fct_relevel(basic_sociality, "social", "intermediate", "solitary"),
+    host_species_1 = factor(host_species_1, levels = levels(sample_size_birds$host_species_1)) # ensure order is consistent
+  ) |>
+  ggplot(aes(x = host_species_1, y = diss, fill = basic_sociality)) +
+  geom_boxplot(width = 0.8) +
+  scale_color_viridis(discrete = TRUE, aesthetics = "fill", name = "sociality") +
+  scale_y_continuous(limits = c(0, 140), breaks = seq(0, 140, by = 40)) +
+  geom_text(data = sample_size_birds, aes(host_species_1, Inf, label = n), hjust = "inward") +
+  labs(x = "host species", y = "dissimilarity (robust Aitchison)") +
+  theme(text = element_text(size = 14),
+        axis.text.y = element_text(face = "italic")) +
+  guides(fill = guide_legend(reverse = TRUE)) +
+  coord_flip()
+
+
 # db-RDA ----
 # _ all hosts ----
 # by species
@@ -283,7 +410,7 @@ print("RDA species, all hosts ---------------")
 rda_sp_all = capscale(formula = df_otus_sub ~ host_species, data = df_metadata_sub,  distance = "robust.aitchison", na.action = na.exclude)
 aov_rda_sp_all = anova(rda_sp_all) 
 print(aov_rda_sp_all) #p = 0.001
-RsquareAdj(rda_sp_all) #R^2 = 0.02556273
+RsquareAdj(rda_sp_all) #adj R^2 = 0.05245709
 
 # by diet
 print("RDA diet, all hosts ---------------")
