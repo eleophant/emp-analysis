@@ -330,12 +330,6 @@ dissimilarity_table_birds_sp2 = dissimilarity_table_birds |>
 dissimilarity_table_birds = dissimilarity_table_birds |> 
   full_join(dissimilarity_table_birds_sp2)
 
-# _ stats ----
-glm_diss_birds = lmer(diss ~ basic_sociality + (1|host_species_1), data = dissimilarity_table_birds)
-summary(glm_diss_birds)
-jtools::summ(glm_diss_birds) #social p = 0.60, solitary 0.46
-
-
 # _ plots ----
 # mammals
 # calculate sample sizes per species
@@ -402,37 +396,46 @@ dissimilarity_table_birds |>
   guides(fill = guide_legend(reverse = TRUE)) +
   coord_flip()
 
+# _ SERVER stats ----
+glm_diss_mammals = lmer(diss ~ basic_sociality + (1|host_species_1), data = dissimilarity_table_mammals)
+summary(glm_diss_mammals)
+jtools::summ(glm_diss_mammals) #Error: vector memory limit of 16.0 Gb reached, see mem.maxVSize()
+
+glm_diss_birds = lmer(diss ~ basic_sociality + (1|host_species_1), data = dissimilarity_table_birds)
+summary(glm_diss_birds)
+jtools::summ(glm_diss_birds) #social p = 0.60, solitary 0.46
+
 
 # db-RDA ----
 # _ all hosts ----
+# ensure that row order matches
+all(rownames(df_otus_sub) == rownames(df_metadata_sub)) #TRUE
+
 # by species
-print("RDA species, all hosts ---------------")
 rda_sp_all = capscale(formula = df_otus_sub ~ host_species, data = df_metadata_sub,  distance = "robust.aitchison", na.action = na.exclude)
 aov_rda_sp_all = anova(rda_sp_all) 
 print(aov_rda_sp_all) #p = 0.001
-RsquareAdj(rda_sp_all) #adj R^2 = 0.05245709
+RsquareAdj(rda_sp_all) #adj R^2 = 0.08435098
 
 # by diet
-print("RDA diet, all hosts ---------------")
 rda_diet_all = capscale(formula = df_otus_sub ~ basic_diet, data = df_metadata_sub,  distance = "robust.aitchison", na.action = na.exclude)
 aov_rda_diet_all = anova(rda_diet_all)
 print(aov_rda_diet_all) #p = 0.001
-RsquareAdj(rda_diet_all) #R^2 = 0.005332206
+RsquareAdj(rda_diet_all) #adj R^2 = 0.01276794
 
 # by sociality
-print("RDA sociality, all hosts ---------------")
 rda_social_all = capscale(formula = df_otus_sub ~ basic_sociality, data = df_metadata_sub,  distance = "robust.aitchison", na.action = na.exclude)
 aov_rda_social_all = anova(rda_social_all)
 print(aov_rda_diet_all) #p = 0.001
-RsquareAdj(rda_social_all)  #R^2 = 0.0141168
+RsquareAdj(rda_social_all)#ajd R^2 = 0.01653155
 
 # _ model selection ----
 # run null and full models
 mod0_all = capscale(df_otus_sub ~ 1, data = df_metadata_sub, na.action = na.exclude)
-mod1_all = capscale(formula = df_otus_sub ~ species + diet + sociality, data = df_metadata_sub,  distance = "robust.aitchison", na.action = na.exclude)
+mod1_all = capscale(formula = df_otus_sub ~ host_species + basic_diet + basic_sociality, data = df_metadata_sub,  distance = "robust.aitchison", na.action = na.exclude) #Some constraints or conditions were aliased because they were redundant. This can happen if terms are linearly dependent (collinear): ‘host_speciess__Turdus_olivater’, ‘host_speciess__Vulpes_vulpes’, ‘host_speciess__Zonotrichia_capensis’
 
 # ordistep
-step_r2_all = ordiR2step(mod0_all, scope = formula(mod1_all), perm.max = 200, na.action = na.exclude)
+step_r2_all = ordiR2step(mod0_all, scope = formula(mod1_all), perm.max = 200, na.action = na.exclude) #mod1_all has colinear variables
 print(step_r2_all)
 
 # _ mammals ----
@@ -454,7 +457,7 @@ aov_rda_social_mammals = anova(rda_social_mammals)
 print(aov_rda_social_mammals) #p = 0.001 
 RsquareAdj(rda_social_mammals)  #R^2 = 0.0142302
 
-# _ model selection ----
+# TODO_ model selection ----
 # run null and full models
 mod0_mammals = capscale(df_otus_sub_mammals ~ 1, data = df_metadata_sub_mammals, na.action = na.exclude)
 mod1_mammals = capscale(formula = df_otus_sub_mammals ~ species + diet + sociality, data = df_metadata_sub_mammals,  distance = "robust.aitchison", na.action = na.exclude)
