@@ -10,18 +10,20 @@ library(conflicted)
 library(viridis)
 library(phyloseq)
 library(fantaxtic)
-#library(phyloseqCompanion)
+library(ggpubr)
+library(patchwork)
 library(vegan)
 library(lme4)
 library(ALDEx2)
 theme_set(theme_classic())
-filter <- dplyr::filter
+filter = dplyr::filter
+theme_set(theme_classic())
 
-# file input ----
-load(file = "emp_analysis_rda_2024_06_18.RData")
-df_otus = df_otus |> as.data.frame()
+## file input ----
+load(file = "emp_analysis_data_2025_01_31.RData") #this dataset has been modified to omit 1 reptile species, black bear, colobine primates
+#df_otus = df_otus |> as.data.frame()
 
-# subsampling ----
+## subsampling ----
 # _ dfs ----
 df_obs_n = df_metadata |> 
   group_by(host_species) |> 
@@ -31,7 +33,7 @@ df_obs_n = df_metadata |>
 df_obs_n |> summarise(mean(n), median(n), max(n), min(n))
 #mean 41, median 3, max 902, min 1
 
-# subsample
+# subsample metadata
 df_metadata_sub = df_metadata |> 
   rownames_to_column() |> 
   group_by(host_species) |> 
@@ -39,13 +41,18 @@ df_metadata_sub = df_metadata |>
   ungroup() |> 
   column_to_rownames("rowname")
 
-common_samples_sub = intersect(rownames(df_otus), rownames(df_metadata_sub))
-df_otus_sub = df_otus[common_samples_sub, , drop = FALSE]
-df_otus_sub = df_otus_sub |> as.data.frame() |> select(where(~ sum(.) != 0)) |> #remove columns (OTUs that are 0 everywhere)
-  as.matrix()
+# subsample otu table
+common_samples_sub = intersect(rownames(mx_otus), rownames(df_metadata_sub))
+df_otus_sub = mx_otus |> as.data.frame() |> 
+  rownames_to_column() |> 
+  filter(rowname %in% common_samples_sub) |> 
+  column_to_rownames("rowname") |>
+  select(where(~ sum(.) != 0)) #remove empty columns (OTUs that are 0 everywhere)
+
+#mx_otus_sub = df_otus_sub |> as.matrix() #necessary?
 
 # _ phyloseq ----
-#set up metadata & otu table
+# set up metadata & otu table
 p_metadata_sub = sample_data(df_metadata_sub)
 p_otu_sub = otu_table(df_otus_sub, taxa_are_rows = FALSE)
 
@@ -54,80 +61,220 @@ sample_names(p_metadata_sub)
 sample_names(p_otu_sub)
 
 # assemble phyloseq object
-physeq_sub = phyloseq(p_otu_sub, p_metadata_sub, p_tax) #works!
+physeq_sub = phyloseq(p_otu_sub, p_metadata_sub, p_tax)
 ps_sub = merge_phyloseq(physeq_sub, tree_emp)
 
-# subset classes ----
+## subset classes ----
 # mammals
 df_metadata_sub_mammals = df_metadata_sub |>
   filter(host_class == "c__Mammalia")
-common_samples_sub_mammals = intersect(rownames(df_otus), rownames(df_metadata_sub_mammals))
-df_otus_sub_mammals = df_otus_mammals[common_samples_sub_mammals, , drop = FALSE]
-df_otus_sub_mammals = df_otus_sub_mammals |> as.data.frame() |> select(where(~ sum(.) != 0)) |> #remove empty columns (OTUs that are 0 everywhere)
-  as.matrix()
+common_samples_sub_mammals = intersect(rownames(mx_otus), rownames(df_metadata_sub_mammals))
+
+df_otus_sub_mammals = mx_otus |> as.data.frame() |> 
+  rownames_to_column() |> 
+  filter(rowname %in% common_samples_sub_mammals) |> 
+  column_to_rownames("rowname") |>
+  select(where(~ sum(.) != 0))
 
 # birds
 df_metadata_sub_birds = df_metadata_sub |>
   filter(host_class == "c__Aves")
-common_samples_sub_birds = intersect(rownames(df_otus), rownames(df_metadata_sub_birds))
-df_otus_sub_birds = df_otus_sub_birds[common_samples_sub_birds, , drop = FALSE]
-df_otus_sub_birds = df_otus_sub_birds |> as.data.frame() |> select(where(~ sum(.) != 0)) |> #remove empty columns (OTUs that are 0 everywhere)
-  as.matrix()
+common_samples_sub_birds = intersect(rownames(mx_otus), rownames(df_metadata_sub_birds))
+
+df_otus_sub_birds = mx_otus |> as.data.frame() |> 
+  rownames_to_column() |> 
+  filter(rowname %in% common_samples_sub_birds) |> 
+  column_to_rownames("rowname") |>
+  select(where(~ sum(.) != 0))
 
 # phyloseq
 ps_mammals_sub = subset_samples(ps_sub, host_class == "c__Mammalia")
 ps_birds_sub = subset_samples(ps_sub, host_class == "c__Aves")
 
-# descriptive stats ----
+## descriptive stats ----
+# reads
 # total number of reads
-df_otus_sub |> sum() #12,950,659
+df_otus_sub |> sum() #12,950,659 (this number will vary slightly each time this script is run since subsampling is random)
 
 # number of reads per sample
 mean(rowSums(df_otus_sub)) #34,535.09
 sd(rowSums(df_otus_sub)) #23,192.04
 
-# number of ASVs (number of columns)
+# _ all ----
+df_metadata_sub |> nrow() #375 samples
+df_metadata_sub |> group_by(host_species) |> 
+  summarise(n = n()) |> print(n = 100) #across 45 species
 df_otus_sub |> as.data.frame() |> ncol() #34,482
 
 
-## TODO relative abundances ---- 
+# _ mammals ----
+df_metadata_sub_mammals |> nrow() #312 samples
+df_metadata_sub_mammals |> group_by(host_species) |> 
+  summarise(n = n()) |> print(n = 35) #across 35 species
+df_otus_sub_mammals |> ncol() #31,451 OTUs
+
+# _ birds ----
+df_metadata_sub_birds |> nrow() #63 samples
+df_metadata_sub_birds |> group_by(host_species) |> 
+  summarise(n = n()) |> print(n = 100) #across 10 species
+df_otus_sub_birds |> ncol() #13,915
+
+## relative abundances ---- 
+# _ SERVER plots ----
 # normalize number of reads using median sequencing depth
-total = median(sample_sums(ps))
+total = median(sample_sums(ps_sub))
 standf = function(x, t = total) round(t * (x / sum(x)))
-a_ps_norm = transform_sample_counts(ps, standf)
+ps_norm = transform_sample_counts(ps_sub, standf)
 
-# plot relative abundances *** does not run on laptop***
-#plot_bar(a_ps_norm, fill = "phylum") +
-#  geom_bar(aes(colour = phylum, fill = phylum), stat = "identity", position = "stack") #+ facet_grid(~ host_order.x)
+# plot relative abundances per class (run mammals on server)
+# mammals - does not run on laptop
+total_mammals = median(sample_sums(ps_mammals_sub))
+standf = function(x, t = total_mammals) round(t * (x / sum(x)))
+ps_norm_mammals = transform_sample_counts(ps_mammals_sub, standf)
 
-# _ dominant taxa ----
-fantaxtic::top_taxa(ps_birds, n = 3, tax_level = "phylum")
-#Firmicutes (39.6%), Proteobacteria (33.8%), and Bacteroidetes (14.4%)
-fantaxtic::top_taxa(ps, n = 5, tax_level = "class")
-#Clostridia (24.8%), Gammaproteobacteria (12.4%), and Bacilli (10.6%)
-
-# mammals
-fantaxtic::top_taxa(ps_mammals, n = 3, tax_level = "phylum")
-fantaxtic::top_taxa(ps_mammals, n = 5, tax_level = "class")
+relab_mammals = plot_bar(ps_norm_mammals, fill = "phylum") +
+  geom_bar(aes(colour = phylum, fill = phylum), stat = "identity", position = "stack") +
+  theme(legend.position = "none") #+ facet_grid(~ host_order)
 
 # birds
-fantaxtic::top_taxa(ps_birds, n = 3, tax_level = "phylum")
-fantaxtic::top_taxa(ps_birds, n = 5, tax_level = "class")
+total_birds = median(sample_sums(ps_birds_sub))
+standf = function(x, t = total_birds) round(t * (x / sum(x)))
+ps_norm_birds = transform_sample_counts(ps_birds_sub, standf)
 
-## TODO alpha div ----
-# per host class
-df_metadata |> 
-  filter(host_class != "c__Reptilia") |> 
-  ggplot(aes(x = host_class, y = adiv_faith_pd)) +
+relab_birds = plot_bar(ps_norm_birds, fill = "phylum") +
+  geom_bar(aes(colour = phylum, fill = phylum), stat = "identity", position = "stack") +
+  theme(legend.position = "none") #+ facet_grid(~ host_order)
+
+# _ dominant taxa ----
+# mammals
+fantaxtic::top_taxa(ps_mammals_sub, n = 3, tax_level = "phylum")
+# Firmicutes 0.367, Proteobacteria 0.334, Bacteroidetes 0.180
+fantaxtic::top_taxa(ps_mammals_sub, n = 5, tax_level = "class")
+
+# birds
+fantaxtic::top_taxa(ps_birds_sub, n = 3, tax_level = "phylum")
+#Firmicutes 0.396, Proteobacteria 0.338, Bacteroidetes 0.144)
+fantaxtic::top_taxa(ps_birds_sub, n = 5, tax_level = "class")
+#Bacilli 0.211, Clostridia 0.175, Gammaproteobacteria 0.173, Betaproteobacteria 0.0645, Alphaproteobacteria 0.0730
+
+## alpha div ----
+# _ class ----
+comparisons_class = list(c("c__Aves", "c__Mammalia"))
+
+# obs OTUs
+class_obs = df_metadata_sub |>
+  ggplot(aes(x = host_class, y = adiv_observed_otus, fill = host_class)) +
   geom_boxplot() +
-  xlab("Host class") +
+  theme(legend.position = "none",
+        axis.title.y = element_text(size = 14), axis.text.y = element_text(size = 14),
+        axis.title.x = element_blank(), axis.text.x = element_blank()) +
+  #xlab("host class") +
+  ylab("observed OTUs") +
+  scale_x_discrete(labels=c("c__Aves" = "Aves", "c__Mammalia" = "Mammalia")) +
+  scale_fill_viridis_d() +
+  stat_compare_means(method = "wilcox.test", comparisons = comparisons_class, label = "p.signif")
+
+# chao1 
+class_chao = df_metadata_sub |>
+  ggplot(aes(x = host_class, y = adiv_chao1, fill = host_class)) +
+  geom_boxplot() +
+  theme(legend.position = "none",
+        axis.title.y = element_text(size = 14), axis.text.y = element_text(size = 14),
+        axis.title.x = element_blank(), axis.text.x = element_blank()) +
+  #xlab("host class") +
+  ylab("Chao1 Index") +
+  scale_x_discrete(labels=c("c__Aves" = "Aves", "c__Mammalia" = "Mammalia")) +
+  scale_fill_viridis_d() +
+  stat_compare_means(method = "wilcox.test", comparisons = comparisons_class, label = "p.signif")
+
+# shannon 
+class_shannon = df_metadata_sub |>
+  ggplot(aes(x = host_class, y = adiv_shannon, fill = host_class)) +
+  geom_boxplot() +
+  theme(legend.position = "none",
+        axis.title = element_text(size = 14), axis.text = element_text(size = 14)) +
+  xlab("host class") +
+  ylab("Shannon Index") +
+  scale_x_discrete(labels=c("c__Aves" = "Aves", "c__Mammalia" = "Mammalia")) +
+  scale_fill_viridis_d() +
+  stat_compare_means(method = "wilcox.test", comparisons = comparisons_class, label = "p.signif")
+
+# faith
+class_faith = df_metadata_sub |>
+  ggplot(aes(x = host_class, y = adiv_faith_pd, fill = host_class)) +
+  geom_boxplot() +
+  theme(legend.position = "none",
+        axis.title = element_text(size = 14), axis.text = element_text(size = 14)) +
+  xlab("host class") +
   ylab("Faith PD") +
-  scale_x_discrete(labels=c("c__Aves" = "Aves", "c__Mammalia" = "Mammalia"))
+  scale_x_discrete(labels=c("c__Aves" = "Aves", "c__Mammalia" = "Mammalia")) +
+  scale_fill_viridis_d() +
+  stat_compare_means(method = "wilcox.test", comparisons = comparisons_class, label = "p.signif")
 
-# statistical tests
-kruskal.test(df_metadata_mb$adiv_faith_pd, df_metadata_mb$host_class) #p = 1.108e-06
-summary(glm(df_metadata_mb$adiv_chao1 ~ df_metadata_mb$host_class)) #p = 8.28e-07
+# combine plots in the right order (Observed OTUs, Chao1, Shannon, Faith)
+combined_class_plot = (class_obs | class_chao) / (class_shannon | class_faith)
+combined_class_plot
 
+# _ sociality ----
+sociality_order = c("solitary", "intermediate", "social")
+
+df_metadata_sub$basic_sociality = factor(df_metadata_sub$basic_sociality, levels = sociality_order)
+
+# obs
+soc_obs = df_metadata_sub |>
+  ggplot(aes(x = basic_sociality, y = adiv_observed_otus, fill = basic_sociality)) +
+  #geom_violin() +
+  geom_boxplot() +
+  theme(legend.position = "none",
+        axis.title.y = element_text(size = 14), axis.text.y = element_text(size = 14),
+        axis.title.x = element_blank(), axis.text.x = element_blank()) +
+  xlab("host sociality") +
+  ylab("observed OTUs") +
+  scale_fill_viridis_d()
+
+# chao1
+soc_chao = df_metadata_sub |>
+  ggplot(aes(x = basic_sociality, y = adiv_chao1, fill = basic_sociality)) +
+  geom_boxplot() +
+  theme(legend.position = "none",
+        axis.title.y = element_text(size = 14), axis.text.y = element_text(size = 14),
+        axis.title.x = element_blank(), axis.text.x = element_blank()) +
+  xlab("host sociality") +
+  ylab("Chao1 Index") +
+  scale_fill_viridis_d()
+
+# shannon
+soc_shannon = df_metadata_sub |>
+  ggplot(aes(x = basic_sociality, y = adiv_shannon, fill = basic_sociality)) +
+  geom_boxplot() +
+  theme(legend.position = "none",
+        axis.title = element_text(size = 14), axis.text = element_text(size = 14)) +
+  xlab("host sociality") +
+  ylab("Shannon Index") +
+  scale_fill_viridis_d()
+
+# faith
+soc_faith = df_metadata_sub |>
+  ggplot(aes(x = basic_sociality, y = adiv_faith_pd, fill = basic_sociality)) +
+  #geom_violin() +
+  geom_boxplot() +
+  theme(legend.position = "none",
+        axis.title = element_text(size = 14), axis.text = element_text(size = 14)) +
+  xlab("host sociality") +
+  ylab("Faith PD") +
+  scale_fill_viridis_d()
+
+# combine sociality plots
+combined_soc_plot = (soc_obs | soc_chao) / (soc_shannon | soc_faith)
+combined_soc_plot
+
+kruskal.test(adiv_faith_pd ~ basic_sociality, data = df_metadata_sub) #KW chi-squared = 15.286, df = 2, p-value = 0.0004795
+kruskal.test(adiv_observed_otus ~ basic_sociality, data = df_metadata_sub) #KW chi-squared = 12.594, df = 2, p-value = 0.001842
+
+# sociality is not independent of host phylogeny
+glm_soc_order = lmer(adiv_faith ~ basic_sociality + (1|host_order), data = df_metadata_sub)
+summary(glm_soc_order)
+jtools::summ(glm_soc_order) #not significant for faith, obs_otus, chao1, shannon
 
 # db-RDA ----
 # _ all hosts ----
@@ -373,7 +520,7 @@ write_csv(social_aldex_birds, "social_aldex_birds.csv")
 save(social_aldex_all, social_aldex_mammals, social_aldex_birds, file = "diff_ab_data.RData")
 
 
-# plots ----
+# _ plots ----
 par(mfrow = c(1,2))
 aldex.plot(social_aldex_all, type = "MA", test = "welch", main = "MA plot")
 aldex.plot(social_aldex_all, type = "MW", test = "welch", main = "effect plot")
@@ -382,7 +529,8 @@ aldex.plot(social_aldex_all, type = "MW", test = "welch", main = "effect plot")
 taxonomy_table = p_tax |> as.data.frame() |> rownames_to_column()
 
 # generate df of differentially abundant ASVs
-social_diff_asvs = social_aldex_all |> as.data.frame() |> rownames_to_column() |> 
+# mammals only, since there are none in birds (but keep the code for birds below)
+social_diff_asvs_mammals = social_aldex_mammals |> as.data.frame() |> rownames_to_column() |> 
   filter(we.eBH < 0.05) |> 
   rownames_to_column("...1") |> 
   left_join(taxonomy_table, by = "rowname") |> # add ASV taxonomical info
@@ -394,17 +542,7 @@ social_diff_asvs = social_aldex_all |> as.data.frame() |> rownames_to_column() |
   mutate(ci_product = effect.low * effect.high ) |> #column that returns TRUE if CI does not contain 0# |> 
   mutate(ci_no_zero = ci_product > 0) #returns TRUE if CI does not include zero
 
-social_diff_asvs |> 
-  ggplot(aes(x = effect, y = reorder(otu_scientific_name, (effect*-1)), colour = phylum)) +
-  geom_point() +
-  xlab("Effect size") +
-  ylab("ASV") +
-  theme(axis.text.y = element_text(face = "italic")) +
-  ggtitle("Differentially abundant ASVs in Aves\nSocial and solitary\n(BH-corrected)") + 
-  geom_vline(xintercept = 0, linetype = "dotted")
-
-# _ birds ----
-# generate df of differentially abundant ASVs
+# birds
 social_diff_asvs_birds = social_aldex_birds |> as.data.frame() |> rownames_to_column() |> 
   filter(we.eBH < 0.05) |> 
   rownames_to_column("...1") |> 
@@ -416,5 +554,14 @@ social_diff_asvs_birds = social_aldex_birds |> as.data.frame() |> rownames_to_co
   mutate(otu_scientific_name = as.factor(otu_scientific_name)) |> 
   mutate(ci_product = effect.low * effect.high ) |> #column that returns TRUE if CI does not contain 0# |> 
   mutate(ci_no_zero = ci_product > 0) #returns TRUE if CI does not include zero
-
 #there are no differentially abundant OTUs in birds
+
+social_diff_asvs_mammals |> 
+  ggplot(aes(x = effect, y = reorder(otu_scientific_name, (effect*-1)), colour = phylum)) +
+  geom_point() +
+  xlab("Effect size") +
+  ylab("ASV") +
+  theme(axis.text.y = element_text(face = "italic")) +
+  ggtitle("Differentially abundant ASVs in mammals\nSocial and solitary\n(BH-corrected)") + 
+  geom_vline(xintercept = 0, linetype = "dotted")
+
