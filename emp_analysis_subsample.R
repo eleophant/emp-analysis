@@ -308,8 +308,8 @@ kruskal.test(adiv_shannon ~ basic_diet, data = df_metadata_sub) #KW chi-squared 
 kruskal.test(adiv_faith_pd ~ basic_diet, data = df_metadata_sub) #KW chi-squared = 8.7463, df = 2, p-value = 0.01261
 
 # diet is not independent of host phylogeny
-glm_diet_order = lmer(adiv_chao1 ~ basic_diet + (1|host_order), data = df_metadata_sub)
-summary(glm_diet_order)
+glm_diet_order = lmer(adiv_observed_otus ~ basic_diet + (1|host_order), data = df_metadata_sub)
+summary(glm_diet_order) #REML obs 4922.4, chao 5163.1, shannon 1342.7, faith 3101
 jtools::summ(glm_diet_order) #not significant for faith, obs_otus, chao1, shannon
 
 # _ sociality ----
@@ -325,9 +325,13 @@ kruskal.test(adiv_shannon ~ basic_sociality, data = df_metadata_sub) #KW chi-squ
 # faith
 kruskal.test(adiv_faith_pd ~ basic_sociality, data = df_metadata_sub) #KW chi-squared = 12.594, df = 2, p-value = 0.001842
 
+# sociality is not independent of host phylogeny
+glm_soc_order = lmer(adiv_faith_pd ~ basic_sociality + (1|host_species), data = df_metadata_sub)
+summary(glm_soc_order) #REML obs 4922.9, chao 5163.6, shannon 1342.4, faith 3118.9
+jtools::summ(glm_soc_order) #not significant for faith, obs_otus, chao1, shannon
+
 # plots
 sociality_order = c("solitary", "intermediate", "social")
-
 df_metadata_sub$basic_sociality = factor(df_metadata_sub$basic_sociality, levels = sociality_order)
 
 # obs
@@ -377,11 +381,6 @@ soc_faith = df_metadata_sub |>
 # combine sociality plots
 combined_soc_plot = (soc_obs | soc_chao) / (soc_shannon | soc_faith)
 combined_soc_plot
-
-# sociality is not independent of host phylogeny
-glm_soc_order = lmer(adiv_faith ~ basic_sociality + (1|host_order), data = df_metadata_sub)
-summary(glm_soc_order)
-jtools::summ(glm_soc_order) #not significant for faith, obs_otus, chao1, shannon
 
 ## dissimilarity ----
 # _ mammals ----
