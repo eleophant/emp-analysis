@@ -12,6 +12,7 @@ library(phyloseq)
 library(fantaxtic)
 library(ggpubr)
 library(patchwork)
+library(ggordiplots)
 library(vegan)
 library(lme4)
 library(ALDEx2)
@@ -50,8 +51,8 @@ df_otus_sub = mx_otus |> as.data.frame() |>
   select(where(~ sum(.) != 0)) #remove empty columns (OTUs that are 0 everywhere)
 
 # ensure that row order matches
-df_metadata_sub <- df_metadata_sub |> 
-  slice(match(rownames(df_otus_sub), rownames(.)))
+df_metadata_sub = df_metadata_sub |>
+  slice(match(rownames(df_otus_sub), rownames(df_metadata_sub)))
 all(rownames(df_otus_sub) == rownames(df_metadata_sub)) #TRUE
 
 # _ phyloseq ----
@@ -60,8 +61,7 @@ p_metadata_sub = sample_data(df_metadata_sub)
 p_otu_sub = otu_table(df_otus_sub, taxa_are_rows = FALSE)
 
 # check that sample names match
-sample_names(p_metadata_sub)
-sample_names(p_otu_sub)
+all(sample_names(p_metadata_sub) == sample_names(p_otu_sub)) #TRUE
 
 # assemble phyloseq object
 physeq_sub = phyloseq(p_otu_sub, p_metadata_sub, p_tax)
@@ -103,13 +103,12 @@ ps_mammals_sub = subset_samples(ps_sub, host_class == "c__Mammalia")
 ps_birds_sub = subset_samples(ps_sub, host_class == "c__Aves")
 
 ## descriptive stats ----
-# reads
 # total number of reads
-df_otus_sub |> sum() #12,950,659 (this number will vary slightly each time this script is run since subsampling is random)
+df_otus_sub |> sum() #13,085,267 (this number will vary slightly each time this script is run since subsampling is random)
 
 # number of reads per sample
-mean(rowSums(df_otus_sub)) #34,535.09
-sd(rowSums(df_otus_sub)) #23,192.04
+mean(rowSums(df_otus_sub)) #34,894.05
+sd(rowSums(df_otus_sub)) #24,286.86
 
 # _ all ----
 df_metadata_sub |> nrow() #375 samples
@@ -224,6 +223,19 @@ class_faith = df_metadata_sub |>
 # combine plots in the right order (Observed OTUs, Chao1, Shannon, Faith)
 combined_class_plot = (class_obs | class_chao) / (class_shannon | class_faith)
 combined_class_plot
+
+# species ----
+# faith
+species_faith = df_metadata_sub |>
+  ggplot(aes(x = host_species, y = adiv_faith_pd, fill = host_species)) +
+  geom_boxplot() +
+  theme(legend.position = "none",
+        axis.title = element_text(size = 14), axis.text = element_text(size = 14)) +
+  xlab("host class") +
+  ylab("Faith PD") +
+  scale_x_discrete(labels=c("c__Aves" = "Aves", "c__Mammalia" = "Mammalia")) +
+  scale_fill_viridis_d() +
+  stat_compare_means(method = "kruskal.test", comparisons = comparisons_class, label = "p.signif")
 
 # _ sociality ----
 sociality_order = c("solitary", "intermediate", "social")
@@ -404,8 +416,7 @@ glm_diss_birds = lmer(diss ~ basic_sociality + (1|host_species_1), data = dissim
 summary(glm_diss_birds)
 jtools::summ(glm_diss_birds) #social p = 0.60, solitary 0.46
 
-
-# db-RDA ----
+## db-RDA ----
 # _ all hosts ----
 # ensure that row order matches
 all(rownames(df_otus_sub) == rownames(df_metadata_sub)) #TRUE
@@ -428,13 +439,13 @@ aov_rda_social_all = anova(rda_social_all)
 print(aov_rda_diet_all) #p = 0.001
 RsquareAdj(rda_social_all)#ajd R^2 = 0.01653155
 
-# _ model selection ----
+# _ model selection
 # run null and full models
 mod0_all = capscale(df_otus_sub ~ 1, data = df_metadata_sub, na.action = na.exclude)
 mod1_all = capscale(formula = df_otus_sub ~ host_species + basic_diet + basic_sociality, data = df_metadata_sub,  distance = "robust.aitchison", na.action = na.exclude) #Some constraints or conditions were aliased because they were redundant. This can happen if terms are linearly dependent (collinear): ‘host_speciess__Turdus_olivater’, ‘host_speciess__Vulpes_vulpes’, ‘host_speciess__Zonotrichia_capensis’
 
 # ordistep
-step_r2_all = ordiR2step(mod0_all, scope = formula(mod1_all), perm.max = 200, na.action = na.exclude) #mod1_all has colinear variables
+step_r2_all = ordiR2step(mod0_all, scope = formula(mod1_all), perm.max = 200, na.action = na.exclude) #mod1_all has collinear variables
 print(step_r2_all)
 
 # _ mammals ----
@@ -456,7 +467,7 @@ aov_rda_social_mammals = anova(rda_social_mammals)
 print(aov_rda_social_mammals) #p = 0.001 
 RsquareAdj(rda_social_mammals) #adj R^2 = 0.02098
 
-# model selection ----
+# model selection
 mod0_mammals = capscale(df_otus_sub_mammals ~ 1, data = df_metadata_sub_mammals, na.action = na.exclude)
 mod1_mammals = capscale(formula = df_otus_sub_mammals ~ host_species + basic_diet + basic_sociality, data = df_metadata_sub_mammals,  distance = "robust.aitchison", na.action = na.exclude) #some collinearity
 
@@ -483,7 +494,7 @@ aov_rda_social_birds = anova(rda_social_birds)
 print(aov_rda_social_birds) #p = 0.012
 RsquareAdj(rda_social_birds) #adj R^2 = 0.02076328
 
-# _ model selection ----
+# _ model selection
 # run null and full models
 mod0_birds = capscale(df_otus_sub_birds ~ 1, data = df_metadata_sub_birds, na.action = na.exclude)
 mod1_birds = capscale(formula = df_otus_sub_birds ~ host_species + basic_diet + basic_sociality, data = df_metadata_sub_birds,  distance = "robust.aitchison", na.action = na.exclude)
@@ -492,145 +503,313 @@ mod1_birds = capscale(formula = df_otus_sub_birds ~ host_species + basic_diet + 
 step_r2_birds = ordiR2step(mod0_birds, scope = formula(mod1_birds), perm.max = 200, na.action = na.exclude)
 print(step_r2_birds)
 
-# plot rda ----
-# _ all hosts ----
+# _ plot all hosts ----
 df_metadata_sub = df_metadata_sub |> rownames_to_column() |> rename("sample_id" = "rowname")
 
 # species
-rda_scores_sp = scores(rda_sp_all, display = "sites") # extract the site scores
-rda_scores_sp_df = as.data.frame(rda_scores_sp)
-rda_scores_sp_df$sample_id = rownames(rda_scores_sp_df) # add a study_id column
-rda_fort_sp_all = rda_scores_sp_df |> 
-  left_join(df_metadata_sub, by = "sample_id") # join to metadata
+rda_scores_sp_df = rda_sp_all |> 
+  scores(display = "sites") |> # extract the site scores
+  as.data.frame() |> 
+  rownames_to_column() |> 
+  mutate(sample_id = rowname) |> #add a sample_id column
+  left_join(df_metadata_sub, by = "sample_id")
+
+gg_ordiplot(rda_sp_all, groups = df_metadata_sub$host_species, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 4.35%, CAP2 1.39%
+
+rda_scores_sp_df |> 
+  ggplot(aes(x = CAP1, y = CAP2, colour = host_species, shape = basic_diet)) +
+  geom_point(size = 2) +
+  geom_vline(xintercept = 0, linetype = "dotted") + 
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  scale_colour_viridis_d() +
+  labs(
+    colour = "host species", 
+    shape = "diet",
+    x = "CAP1 (4.35%)", 
+    y = "CAP2 (1.39%)"
+  ) +
+  theme(
+    text = element_text(size = 14), 
+    legend.position = "none") +
+  ggtitle("A (species)")
 
 # diet
-rda_scores_diet = scores(rda_diet_all, display = "sites")
-rda_scores_diet_df = as.data.frame(rda_scores_diet)
-rda_scores_diet_df$sample_id = rownames(rda_scores_diet_df)
-rda_fort_diet_all = rda_scores_diet_df |> 
+rda_scores_diet_df = rda_diet_all |> 
+  scores(display = "sites") |> # extract the site scores
+  as.data.frame() |> 
+  rownames_to_column() |> 
+  mutate(sample_id = rowname) |> #add a sample_id column
   left_join(df_metadata_sub, by = "sample_id")
+
+gg_ordiplot(rda_diet_all, groups = df_metadata_sub$basic_diet, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 1.13%, CAP2 0.67%
+
+rda_scores_diet_df |> 
+  ggplot(aes(x = CAP1, y = CAP2, colour = basic_diet, shape = basic_sociality)) +
+  geom_point() +
+  geom_vline(xintercept = 0, linetype = "dotted") + 
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  scale_colour_viridis_d() +
+  labs(
+    colour = "diet", 
+    shape = "sociality",
+    x = "CAP1 (1.13%)", 
+    y = "CAP2 (0.67%)"
+  ) +
+  theme(
+    legend.text = element_text(size = 14), 
+    legend.title = element_text(size = 14),
+    axis.title = element_text(size = 14)
+  ) +
+  ggtitle("B (diet)")
 
 # sociality
-rda_scores_social = scores(rda_social_all, display = "sites")
-rda_scores_social_df = as.data.frame(rda_scores_social)
-rda_scores_social_df$sample_id = rownames(rda_scores_social_df)
-rda_fort_social_all = rda_scores_social_df |> 
+rda_scores_social_df = rda_social_all |> 
+  scores(display = "sites") |> # extract the site scores
+  as.data.frame() |> 
+  rownames_to_column() |> 
+  mutate(sample_id = rowname) |> #add a sample_id column
   left_join(df_metadata_sub, by = "sample_id")
 
-# TODO ----
-# plots
-rda_fort_sp_all |> 
-  ggplot(aes(x = CAP1, y = CAP2, colour = host_species)) +
+gg_ordiplot(rda_social_all, groups = df_metadata_sub$basic_sociality, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 1.66%, CAP2 0.52%
+
+rda_scores_social_df |> 
+  ggplot(aes(x = CAP1, y = CAP2, shape = basic_sociality, colour = host_class)) +
   geom_point() +
-  theme(text = element_text(size = 14))
+  geom_vline(xintercept = 0, linetype = "dotted") + 
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  scale_colour_viridis_d() +
+  labs(
+    shape = "sociality", 
+    colour = "order",
+    x = "CAP1 (1.66%)", 
+    y = "CAP2 (0.52%)"
+  ) +
+  theme(
+    legend.text = element_text(size = 14), 
+    legend.title = element_text(size = 14),
+    axis.title = element_text(size = 14)
+  ) +
+  ggtitle("C (sociality)")
 
-rda_fort_diet_all |> 
-  ggplot(aes(x = CAP1, y = CAP2, colour = basic_diet)) +
-  geom_point() +
-  theme(text = element_text(size = 14))
-
-rda_fort_social_all |> 
-  ggplot(aes(x = CAP1, y = CAP2, colour = host_class)) +
-  geom_point() +
-  theme(text = element_text(size = 14))
-
-p_sp_all
-p_diet_all
-p_social_all
-
-# _ mammals ----
-df_metadata_sub_mammals = df_metadata_sub_mammals |> rownames_to_column() |> rename("sample_id" = "rowname")
-
+# _ plot mammals ----
 # species
-rda_scores_sp_mammals = scores(rda_sp_mammals, display = "sites")
-rda_scores_sp_mammals_df = as.data.frame(rda_scores_sp_mammals)
-rda_scores_sp_mammals_df$sample_id = rownames(rda_scores_sp_mammals_df)
-rda_fort_sp_mammals_all = rda_scores_sp_mammals_df |> 
-  left_join(df_metadata_sub_mammals, by = "sample_id")
+rda_scores_sp_mammals_df = rda_sp_mammals |> 
+  scores(display = "sites") |> # extract the site scores
+  as.data.frame() |> 
+  rownames_to_column() |> 
+  mutate(sample_id = rowname) |> #add a sample_id column
+  left_join(df_metadata_sub, by = "sample_id")
+
+gg_ordiplot(rda_sp_mammals, groups = df_metadata_sub_mammals$host_species, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 4.52%, CAP2 1.57%
+
+rda_scores_sp_mammals_df |> 
+  ggplot(aes(x = CAP1, y = CAP2, colour = host_species, shape = basic_diet)) +
+  geom_point(size = 2) +
+  geom_vline(xintercept = 0, linetype = "dotted") + 
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  scale_colour_viridis_d() +
+  labs(
+    colour = "host species", 
+    shape = "diet",
+    x = "CAP1 (4.52%)", 
+    y = "CAP2 (1.57%)"
+  ) +
+  theme(
+    text = element_text(size = 14), 
+    legend.position = "none") +
+  ggtitle("A (mammals)")
 
 # diet
-rda_scores_diet_mammals = scores(rda_diet_mammals, display = "sites")
-rda_scores_diet_mammals_df = as.data.frame(rda_scores_diet_mammals)
-rda_scores_diet_mammals_df$sample_id = rownames(rda_scores_diet_mammals_df)
-rda_fort_diet_mammals_all = rda_scores_diet_mammals_df |> 
-  left_join(df_metadata_sub_mammals, by = "sample_id")
+rda_scores_diet_mammals_df = rda_diet_mammals |> 
+  scores(display = "sites") |> # extract the site scores
+  as.data.frame() |> 
+  rownames_to_column() |> 
+  mutate(sample_id = rowname) |> #add a sample_id column
+  left_join(df_metadata_sub, by = "sample_id")
+
+gg_ordiplot(rda_diet_mammals, groups = df_metadata_sub_mammals$basic_diet, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 1.28%, CAP2 0.19%
+
+rda_scores_diet_mammals_df |> 
+  ggplot(aes(x = CAP1, y = CAP2, colour = basic_diet, shape = basic_sociality)) +
+  geom_point() +
+  geom_vline(xintercept = 0, linetype = "dotted") + 
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  scale_colour_viridis_d() +
+  labs(
+    colour = "diet", 
+    shape = "sociality",
+    x = "CAP1 (1.28%)", 
+    y = "CAP2 (0.19%)"
+  ) +
+  theme(
+    legend.text = element_text(size = 14), 
+    legend.title = element_text(size = 14),
+    axis.title = element_text(size = 14)
+  ) +
+  ggtitle("B (mammals)")
 
 # sociality
-rda_scores_social_mammals = scores(rda_social_mammals, display = "sites")
-rda_scores_social_mammals_df = as.data.frame(rda_scores_social_mammals)
-rda_scores_social_mammals_df$sample_id = rownames(rda_scores_social_mammals_df)
-rda_fort_social_mammals = rda_scores_social_mammals_df |> 
-  left_join(df_metadata_sub_mammals, by = "sample_id")
+rda_scores_social_mammals_df = rda_social_mammals |> 
+  scores(display = "sites") |> # extract the site scores
+  as.data.frame() |> 
+  rownames_to_column() |> 
+  mutate(sample_id = rowname) |> #add a sample_id column
+  left_join(df_metadata_sub, by = "sample_id")
 
-# plots
-p_sp_mammals = ggplot(rda_fort_social_mammals, aes(x = CAP1, y = CAP2, colour = host_species)) +
-  geom_point()
-p_diet_mammals = ggplot(rda_fort_social_mammals, aes(x = CAP1, y = CAP2, colour = basic_diet)) +
-  geom_point()
-p_social_mammals = ggplot(rda_fort_social_mammals, aes(x = CAP1, y = CAP2, colour = host_species)) +
-  geom_point() + theme(legend.position="none")
+gg_ordiplot(rda_social_mammals, groups = df_metadata_sub_mammals$basic_sociality, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 2.03%, CAP2 0.70%
 
-# _ birds ----
+rda_scores_social_mammals_df |> 
+  ggplot(aes(x = CAP1, y = CAP2, colour = basic_sociality)) +
+  geom_point() +
+  geom_vline(xintercept = 0, linetype = "dotted") + 
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  scale_colour_viridis_d() +
+  labs(
+    colour = "sociality", 
+    x = "CAP1 (2.03%)", 
+    y = "CAP2 (0.70%)"
+  ) +
+  theme(
+    legend.text = element_text(size = 14), 
+    legend.title = element_text(size = 14),
+    axis.title = element_text(size = 14)
+  ) +
+  ggtitle("C (mammals)")
+
+# _ plot birds ----
 df_metadata_sub_birds = df_metadata_sub_birds |> rownames_to_column() |> rename("sample_id" = "rowname")
 
 # species
-rda_scores_sp_birds = scores(rda_sp_birds, display = "sites") # extract the site scores
-rda_scores_sp_df_birds = as.data.frame(rda_scores_sp_birds)
-rda_scores_sp_df_birds$sample_id = rownames(rda_scores_sp_df_birds) # add a study_id column
-rda_fort_sp_birds = rda_scores_sp_df_birds |> 
-  left_join(df_metadata_sub_birds, by = "sample_id") # join to metadata
-
-# diet
-rda_scores_diet_birds = scores(rda_diet_birds, display = "sites")
-rda_scores_diet_df_birds = as.data.frame(rda_scores_diet_birds)
-rda_scores_diet_df_birds$sample_id = rownames(rda_scores_diet_df_birds)
-rda_fort_diet_birds = rda_scores_diet_df_birds |> 
+rda_scores_sp_birds_df = rda_sp_birds |> 
+  scores(display = "sites") |> # extract the site scores
+  as.data.frame() |> 
+  rownames_to_column() |> 
+  mutate(sample_id = rowname) |> #add a sample_id column
   left_join(df_metadata_sub, by = "sample_id")
 
+gg_ordiplot(rda_sp_birds, groups = df_metadata_sub_birds$host_species, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 10.65%, CAP2 4.17%
+
+rda_scores_sp_birds_df |> 
+  ggplot(aes(x = CAP1, y = CAP2, colour = host_scientific_name, shape = basic_diet)) +
+  geom_point(size = 2) +
+  geom_vline(xintercept = 0, linetype = "dotted") + 
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  scale_colour_viridis_d() +
+  labs(
+    colour = "host species", 
+    shape = "diet",
+    x = "CAP1 (10.65%)", 
+    y = "CAP2 (4.17%)"
+  ) +
+  theme(
+    text = element_text(size = 14),
+    legend.text = element_text(face = "italic")) +
+  ggtitle("A (birds)")
+
+# diet
+rda_scores_diet_birds_df = rda_diet_birds |> 
+  scores(display = "sites") |> # extract the site scores
+  as.data.frame() |> 
+  rownames_to_column() |> 
+  mutate(sample_id = rowname) |> #add a sample_id column
+  left_join(df_metadata_sub, by = "sample_id")
+
+gg_ordiplot(rda_diet_birds, groups = df_metadata_sub_birds$basic_diet, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 3.82% (no other axes)
+
+rda_scores_diet_birds_df |> 
+  ggplot(aes(x = CAP1, y = MDS1, colour = basic_diet, shape = basic_sociality)) +
+  geom_point() +
+  geom_vline(xintercept = 0, linetype = "dotted") + 
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  scale_colour_viridis_d() +
+  labs(
+    colour = "diet", 
+    shape = "sociality",
+    x = "CAP1 (1.28%)", 
+    y = "CAP2 (0.19%)"
+  ) +
+  theme(
+    legend.text = element_text(size = 14), 
+    legend.title = element_text(size = 14),
+    axis.title = element_text(size = 14)
+  ) +
+  ggtitle("B (birds)")
+
 # sociality
-rda_scores_social_birds = scores(rda_social_birds, display = "sites")
-rda_scores_social_df_birds = as.data.frame(rda_scores_social_birds)
-rda_scores_social_df_birds$sample_id = rownames(rda_scores_social_df_birds)
-rda_fort_social_birds = rda_scores_social_df_birds |> 
-  left_join(df_metadata_sub_birds, by = "sample_id")
+rda_scores_social_birds_df = rda_social_birds |> 
+  scores(display = "sites") |> # extract the site scores
+  as.data.frame() |> 
+  rownames_to_column() |> 
+  mutate(sample_id = rowname) |> #add a sample_id column
+  left_join(df_metadata_sub, by = "sample_id")
 
-# plots
-p_sp_birds = ggplot(rda_fort_sp_birds, aes(x = CAP1, y = CAP2, colour = host_species)) +
-  geom_point() #+ theme(legend.position="none")
-p_diet_birds = ggplot(rda_fort_diet_birds, aes(x = CAP1, y = CAP2, colour = basic_diet)) +
-  geom_point()
-p_social_birds = ggplot(rda_fort_social_birds, aes(x = CAP1, y = CAP2, colour = basic_sociality)) +
-  geom_point()
+gg_ordiplot(rda_social_birds, groups = df_metadata_sub_birds$basic_sociality, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 4.07%, CAP2 1.16%
+
+rda_scores_social_birds_df |> 
+  ggplot(aes(x = CAP1, y = CAP2, colour = basic_sociality)) +
+  geom_point() +
+  geom_vline(xintercept = 0, linetype = "dotted") + 
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  scale_colour_viridis_d() +
+  labs(
+    colour = "sociality", 
+    x = "CAP1 (4.07%)", 
+    y = "CAP2 (1.16%)"
+  ) +
+  theme(
+    legend.text = element_text(size = 14), 
+    legend.title = element_text(size = 14),
+    axis.title = element_text(size = 14)
+  ) +
+  ggtitle("C (birds)")
 
 
-# diff ab ----
+# SERVER diff ab ----
 # _ setup ----
-# exclude intermediate sociality
+# all
 df_metadata_sub_da = df_metadata_sub |> 
-  filter(basic_sociality != "intermediate")
-df_metadata_sub_mammals_da = df_metadata_sub_mammals |> 
-  filter(basic_sociality != "intermediate")
-df_metadata_sub_birds_da = df_metadata_sub_birds |> 
-  filter(basic_sociality != "intermediate")
+  filter(basic_sociality != "intermediate") |> # exclude intermediate sociality
+  column_to_rownames("sample_id") # bring rownames back
 
-# subset otu table
-common_samples_sub_da = intersect(rownames(df_otus_sub), rownames(df_metadata_sub_da))
-df_otus_sub_da = df_otus_sub[common_samples_sub_da, , drop = FALSE]
-df_otus_sub_da = df_otus_sub_da |> as.data.frame() |> select(where(~ sum(.) != 0)) |> #remove columns (OTUs that are 0 everywhere)
-  as.matrix()
+# subsample otu table
+common_samples_sub_da = intersect(rownames(mx_otus), rownames(df_metadata_sub_da))
 
-common_samples_sub_mammals_da = intersect(rownames(df_otus_sub_mammals), rownames(df_metadata_sub_mammals_da))
-df_otus_sub_mammals_da = df_otus_sub_mammals[common_samples_sub_mammals_da, , drop = FALSE]
-df_otus_sub_mammals_da = df_otus_sub_mammals_da |> as.data.frame() |> select(where(~ sum(.) != 0)) |> #remove columns (OTUs that are 0 everywhere)
-  as.matrix()
+df_otus_sub_da = df_otus_sub |>
+  rownames_to_column() |>
+  filter(rowname %in% common_samples_sub_da) |> 
+  column_to_rownames("rowname") |>
+  select(where(~ sum(.) != 0))
 
-common_samples_sub_birds_da = intersect(rownames(df_otus_sub_birds), rownames(df_metadata_sub_birds_da))
-df_otus_sub_birds_da = df_otus_sub_birds[common_samples_sub_birds_da, , drop = FALSE]
-df_otus_sub_birds_da = df_otus_sub_birds_da |> as.data.frame() |> select(where(~ sum(.) != 0)) |> #remove columns (OTUs that are 0 everywhere)
-  as.matrix()
+# mammals
+df_metadata_sub_mammals_da = df_metadata_sub |> 
+  filter(basic_sociality != "intermediate") |>
+  filter(host_class == "c__Mammalia") |> 
+  column_to_rownames("sample_id")
+
+common_samples_sub_mammals_da = intersect(rownames(mx_otus), rownames(df_metadata_sub_mammals_da))
+
+df_otus_sub_mammals_da = df_otus_sub |>
+  rownames_to_column() |>
+  filter(rowname %in% common_samples_sub_mammals_da) |> 
+  column_to_rownames("rowname") |>
+  select(where(~ sum(.) != 0))
+
+# birds
+df_metadata_sub_birds_da = df_metadata_sub |> 
+  filter(basic_sociality != "intermediate") |>
+  filter(host_class == "c__Aves") |> 
+  column_to_rownames("sample_id")
+
+common_samples_sub_birds_da = intersect(rownames(mx_otus), rownames(df_metadata_sub_birds_da))
+
+df_otus_sub_birds_da = df_otus_sub |>
+  rownames_to_column() |>
+  filter(rowname %in% common_samples_sub_birds_da) |> 
+  column_to_rownames("rowname") |>
+  select(where(~ sum(.) != 0))
 
 # _ all hosts ----
-v_social_da = df_metadata_sub |> pull(basic_sociality)
+v_social_da = df_metadata_sub_da |> pull(basic_sociality)
 social_clr = aldex.clr(t(df_otus_sub_da), v_social_da, mc.samples = 200) #do not run on laptop
 social_ttest = aldex.ttest(social_clr) #do not run on laptop
 aldex_social_effect = aldex.effect(social_clr, CI = TRUE)
