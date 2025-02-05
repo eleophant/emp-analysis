@@ -103,30 +103,80 @@ ps_mammals_sub = subset_samples(ps_sub, host_class == "c__Mammalia")
 ps_birds_sub = subset_samples(ps_sub, host_class == "c__Aves")
 
 ## descriptive stats ----
-# total number of reads
-df_otus_sub |> sum() #13,085,267 (this number will vary slightly each time this script is run since subsampling is random)
-
-# number of reads per sample
-mean(rowSums(df_otus_sub)) #34,894.05
-sd(rowSums(df_otus_sub)) #24,286.86
-
 # _ all ----
 df_metadata_sub |> nrow() #375 samples
 df_metadata_sub |> group_by(host_species) |> 
   summarise(n = n()) |> print(n = 100) #across 45 species
-df_otus_sub |> as.data.frame() |> ncol() #34,482
+df_otus_sub |> as.data.frame() |> ncol() #number of OTUs = 34,482
+df_otus_sub |> sum() #total reads = 13,085,267 (this number will vary slightly each time this script is run since subsampling is random)
 
+# per sample
+mean(rowSums(df_otus_sub)) #mean number of reads = 34,894.05
+sd(rowSums(df_otus_sub)) #24,286.86
+
+otus_per_sample = df_otus_sub |> mutate(total_otus = rowSums(df_otus_sub != 0)) |> rownames_to_column() |> 
+  select(rowname, total_otus)
+
+otus_per_sample = df_metadata_sub |> 
+  rownames_to_column() |> 
+  #rename(rowname = sample_id) |> 
+  full_join(otus_per_sample) |> 
+  select(rowname, host_class, host_scientific_name, total_otus)
+
+otus_per_sample |> summarise(mean(total_otus), median(total_otus), max(total_otus), min(total_otus))
+#mean 1019, median 961, max 2817, min 114
+  
 # _ mammals ----
+# collectively
 df_metadata_sub_mammals |> nrow() #312 samples
 df_metadata_sub_mammals |> group_by(host_species) |> 
   summarise(n = n()) |> print(n = 35) #across 35 species
 df_otus_sub_mammals |> ncol() #31,451 OTUs
+df_otus_sub_mammals |> sum() #total reads = 11,086,194 (this number will vary slightly each time this script is run since subsampling is random)
+
+# per sample
+mean(rowSums(df_otus_sub_mammals)) #mean number of reads = 35,532.67
+sd(rowSums(df_otus_sub_mammals)) #23,866.22
+
+otus_per_sample_mammals = df_otus_sub_mammals |> mutate(total_otus = rowSums(df_otus_sub_mammals != 0)) |> rownames_to_column() |> 
+  select(rowname, total_otus)
+
+otus_per_sample_mammals = df_metadata_sub_mammals |> 
+  #rename(rowname = sample_id) |> 
+  rownames_to_column() |> 
+  full_join(otus_per_sample_mammals) |> 
+  select(rowname, host_class, host_scientific_name, total_otus)
+
+otus_per_sample_mammals |> summarise(mean(total_otus), median(total_otus), max(total_otus), min(total_otus))
+#mean 1062, median 1004, max 2473, min 209
 
 # _ birds ----
+#collectively
 df_metadata_sub_birds |> nrow() #63 samples
 df_metadata_sub_birds |> group_by(host_species) |> 
   summarise(n = n()) |> print(n = 100) #across 10 species
 df_otus_sub_birds |> ncol() #13,915
+df_otus_sub_birds |> sum() #total reads = 1,999,073 (this number will vary slightly each time this script is run since subsampling is random)
+
+# per sample
+mean(rowSums(df_otus_sub_birds)) #mean number of reads = 31,731.32
+sd(rowSums(df_otus_sub_birds)) #26,244.05
+
+# per sample
+otus_per_sample_birds = df_otus_sub_birds |> mutate(total_otus = rowSums(df_otus_sub_birds != 0)) |> rownames_to_column() |> 
+  select(rowname, total_otus)
+
+otus_per_sample_birds = df_metadata_sub_birds |> 
+  #rename(rowname = sample_id) |> 
+  rownames_to_column() |> 
+  full_join(otus_per_sample_birds) |> 
+  select(rowname, host_class, host_scientific_name, total_otus)
+
+otus_per_sample_birds |> summarise(mean(total_otus), median(total_otus), max(total_otus), min(total_otus))
+#mean 807, median 695, max 2817, min 114
+
+# _ stats ----
+wilcox.test(total_otus ~ host_class, data = otus_per_sample) #W = 6841, p-value = 0.0001415
 
 ## relative abundances ---- 
 # _ SERVER plots ----
@@ -155,16 +205,23 @@ relab_birds = plot_bar(ps_norm_birds, fill = "phylum") +
   theme(legend.position = "none") #+ facet_grid(~ host_order)
 
 # _ dominant taxa ----
+# all
+fantaxtic::top_taxa(ps_sub, n = 3, tax_level = "phylum")
+#Firmicutes 0.395, Proteobacteria 0.316, Bacteroidetes 0.177
+fantaxtic::top_taxa(ps_sub, n = 5, tax_level = "class")
+#Clostridia 0.233, Gammaproteobacteria 0.169, Bacilli 0.150, Bacteroidia 0.0838, Alphaproteobacteria 0.0714
+
 # mammals
 fantaxtic::top_taxa(ps_mammals_sub, n = 3, tax_level = "phylum")
-# Firmicutes 0.367, Proteobacteria 0.334, Bacteroidetes 0.180
+#Firmicutes 0.395, Proteobacteria 0.311, Bacteroidetes 0.184
 fantaxtic::top_taxa(ps_mammals_sub, n = 5, tax_level = "class")
+#Clostridia 0.245, Gammaproteobacteria 0.168, Bacilli 0.137, Bacteroidia 0.0930, Alphaproteobacteria 0.0711
 
 # birds
 fantaxtic::top_taxa(ps_birds_sub, n = 3, tax_level = "phylum")
 #Firmicutes 0.396, Proteobacteria 0.338, Bacteroidetes 0.144)
 fantaxtic::top_taxa(ps_birds_sub, n = 5, tax_level = "class")
-#Bacilli 0.211, Clostridia 0.175, Gammaproteobacteria 0.173, Betaproteobacteria 0.0645, Alphaproteobacteria 0.0730
+#Bacilli 0.211, Clostridia 0.175, Gammaproteobacteria 0.173, Alphaproteobacteria 0.0730, Betaproteobacteria 0.0645
 
 ## alpha div ----
 # _ class ----
@@ -224,20 +281,51 @@ class_faith = df_metadata_sub |>
 combined_class_plot = (class_obs | class_chao) / (class_shannon | class_faith)
 combined_class_plot
 
-# species ----
+# _ species ----
+# obs OTUs
+kruskal.test(adiv_observed_otus ~ host_species, data = df_metadata_sub) #KW chi-squared = 156.7, df = 44, p-value = 1.488e-14
+
+# chao
+kruskal.test(adiv_chao1 ~ host_species, data = df_metadata_sub) #KW chi-squared = 159.33, df = 44, p-value = 5.623e-15
+
+# shannon
+kruskal.test(adiv_shannon ~ host_species, data = df_metadata_sub) #KW chi-squared = 168.36, df = 44, p-value < 2.2e-16
+
 # faith
-species_faith = df_metadata_sub |>
-  ggplot(aes(x = host_species, y = adiv_faith_pd, fill = host_species)) +
-  geom_boxplot() +
-  theme(legend.position = "none",
-        axis.title = element_text(size = 14), axis.text = element_text(size = 14)) +
-  xlab("host class") +
-  ylab("Faith PD") +
-  scale_x_discrete(labels=c("c__Aves" = "Aves", "c__Mammalia" = "Mammalia")) +
-  scale_fill_viridis_d() +
-  stat_compare_means(method = "kruskal.test", comparisons = comparisons_class, label = "p.signif")
+kruskal.test(adiv_faith_pd ~ host_species, data = df_metadata_sub) #KW chi-squared = 142.04, df = 44, p-value = 2.991e-12
+
+# _ diet ----
+# obs OTUs
+kruskal.test(adiv_observed_otus ~ basic_diet, data = df_metadata_sub) #KW chi-squared = 11.4, df = 2, p-value = 0.003346
+
+# chao
+kruskal.test(adiv_chao1 ~ basic_diet, data = df_metadata_sub) #KW chi-squared = 12.91, df = 2, p-value = 0.001573
+
+# shannon
+kruskal.test(adiv_shannon ~ basic_diet, data = df_metadata_sub) #KW chi-squared = 9.4752, df = 2, p-value = 0.00876
+
+# faith
+kruskal.test(adiv_faith_pd ~ basic_diet, data = df_metadata_sub) #KW chi-squared = 8.7463, df = 2, p-value = 0.01261
+
+# diet is not independent of host phylogeny
+glm_diet_order = lmer(adiv_chao1 ~ basic_diet + (1|host_order), data = df_metadata_sub)
+summary(glm_diet_order)
+jtools::summ(glm_diet_order) #not significant for faith, obs_otus, chao1, shannon
 
 # _ sociality ----
+# obs OTUs
+kruskal.test(adiv_observed_otus ~ basic_sociality, data = df_metadata_sub) #KW chi-squared = 15.286, df = 2, p-value = 0.0004795
+
+# chao
+kruskal.test(adiv_chao1 ~ basic_sociality, data = df_metadata_sub) #KW chi-squared = 16.243, df = 2, p-value = 0.0002971
+
+# shannon
+kruskal.test(adiv_shannon ~ basic_sociality, data = df_metadata_sub) #KW chi-squared = 19.744, df = 2, p-value = 5.159e-05
+
+# faith
+kruskal.test(adiv_faith_pd ~ basic_sociality, data = df_metadata_sub) #KW chi-squared = 12.594, df = 2, p-value = 0.001842
+
+# plots
 sociality_order = c("solitary", "intermediate", "social")
 
 df_metadata_sub$basic_sociality = factor(df_metadata_sub$basic_sociality, levels = sociality_order)
@@ -289,9 +377,6 @@ soc_faith = df_metadata_sub |>
 # combine sociality plots
 combined_soc_plot = (soc_obs | soc_chao) / (soc_shannon | soc_faith)
 combined_soc_plot
-
-kruskal.test(adiv_faith_pd ~ basic_sociality, data = df_metadata_sub) #KW chi-squared = 15.286, df = 2, p-value = 0.0004795
-kruskal.test(adiv_observed_otus ~ basic_sociality, data = df_metadata_sub) #KW chi-squared = 12.594, df = 2, p-value = 0.001842
 
 # sociality is not independent of host phylogeny
 glm_soc_order = lmer(adiv_faith ~ basic_sociality + (1|host_order), data = df_metadata_sub)
@@ -373,7 +458,6 @@ dissimilarity_table_mammals |>
         axis.text.y = element_text(face = "italic")) +
   guides(fill = guide_legend(reverse = TRUE)) +
   coord_flip()
-
 
 # birds 
 # calculate sample sizes per species
