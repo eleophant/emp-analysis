@@ -191,8 +191,21 @@ total_mammals = median(sample_sums(ps_mammals_sub))
 standf = function(x, t = total_mammals) round(t * (x / sum(x)))
 ps_norm_mammals = transform_sample_counts(ps_mammals_sub, standf)
 
-# SERVER ----
+# _ SERVER plot ----
 # mammals rel ab plot on server 
+
+load("plot_relab_mammals.RData")
+
+plot_relab_mammals = relab_mammals_plot = ggplot(relab_mammals_df, aes(x = Sample, y = Abundance, fill = phylum)) +
+  geom_bar(stat = "identity", position = "stack") +
+  xlab("sample") +
+  ylab("relative abundance") +
+  theme(axis.text.x = element_blank(),
+        text = element_text(size = 14)) +
+  scale_fill_viridis_d(labels = c("Actinobacteria", "Bacteroidetes", "Cyanobacteria", "Euryarchaeota", "Firmicutes", "Lentisphaerae", "Proteobacteria", "Spirochaetae",  "Tenericutes", "Verrucomicrobia", "Other")) +
+  ggtitle("A (mammals)")
+
+plot_relab_mammals
 
 # birds
 total_birds = median(sample_sums(ps_birds_sub))
@@ -225,13 +238,14 @@ relab_birds_df = relab_birds_df |>
   mutate(RelativeAbundance = Abundance / sum(Abundance))
 
 # plot
-plot_relab_birds = ggplot(relab_birds_df, aes(x = Sample, y = RelativeAbundance, fill = phylum)) +
+plot_relab_birds = ggplot(relab_birds_df, aes(x = Sample, y = Abundance, fill = phylum)) +
   geom_bar(stat = "identity", position = "stack") +
   xlab("sample") +
   ylab("relative abundance") +
   theme(axis.text.x = element_blank(),
         text = element_text(size = 14)) +
-  scale_fill_viridis_d(labels = c("Actinobacteria", "Bacteroidetes", "Cyanobacteria", "Firmicutes", "Lentisphaerae", "Planctomycetes", "Proteobacteria", "Spirochaetae", "Tenericutes", "Verrucomicrobia", "Other"))
+  scale_fill_viridis_d(labels = c("Actinobacteria", "Bacteroidetes", "Cyanobacteria", "Firmicutes", "Lentisphaerae", "Planctomycetes", "Proteobacteria", "Spirochaetae", "Tenericutes", "Verrucomicrobia", "Other")) +
+  ggtitle("B (birds)")
 
 plot_relab_birds
 
@@ -966,7 +980,7 @@ taxonomy_table = p_tax |> as.data.frame() |> rownames_to_column()
 
 # generate df of differentially abundant ASVs
 # mammals only, since there are none in birds (but keep the code for birds below)
-social_diff_asvs_mammals = social_aldex_mammals |> as.data.frame() |> rownames_to_column() |> 
+social_diff_asvs_mammals = social_aldex_mammals |> 
   filter(we.eBH < 0.05) |> 
   rownames_to_column("...1") |> 
   left_join(taxonomy_table, by = "rowname") |> # add ASV taxonomical info
@@ -979,7 +993,7 @@ social_diff_asvs_mammals = social_aldex_mammals |> as.data.frame() |> rownames_t
   mutate(ci_no_zero = ci_product > 0) #returns TRUE if CI does not include zero
 
 # birds
-social_diff_asvs_birds = social_aldex_birds |> as.data.frame() |> rownames_to_column() |> 
+social_diff_asvs_birds = social_aldex_birds |>
   filter(we.eBH < 0.05) |> 
   rownames_to_column("...1") |> 
   left_join(taxonomy_table, by = "rowname") |> # add ASV taxonomical info
