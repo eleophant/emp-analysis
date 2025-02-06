@@ -74,7 +74,7 @@ glm_diss_mammals = lmer(diss ~ basic_sociality + (1|host_species_1), data = diss
 print("glm_diss_mammals summary----")
 summary(glm_diss_mammals)
 print("glm_diss_mammals jtools----")
-jtools::summ(glm_diss_mammals) #Error: vector memory limit of 16.0 Gb reached, see mem.maxVSize()
+jtools::summ(glm_diss_mammals)
 
 ## diff ab ----
 # all
