@@ -550,17 +550,18 @@ RsquareAdj(rda_diet_all) #adj R^2 = 0.01276794
 # by sociality
 rda_social_all = capscale(formula = df_otus_sub ~ basic_sociality, data = df_metadata_sub,  distance = "robust.aitchison", na.action = na.exclude)
 aov_rda_social_all = anova(rda_social_all)
-print(aov_rda_diet_all) #p = 0.001
+print(aov_rda_diet_all) # p = 0.001
 RsquareAdj(rda_social_all) #ajd R^2 = 0.01653155
 
 # _ model selection
 # run null and full models
-mod0_all = capscale(df_otus_sub ~ 1, data = df_metadata_sub, na.action = na.exclude)
+mod0_all = capscale(df_otus_sub ~ 1, data = df_metadata_sub, distance = "robust.aitchison", na.action = na.exclude)
 mod1_all = capscale(formula = df_otus_sub ~ host_species + basic_diet + basic_sociality, data = df_metadata_sub,  distance = "robust.aitchison", na.action = na.exclude) #Some constraints or conditions were aliased because they were redundant. This can happen if terms are linearly dependent (collinear): ‘host_speciess__Turdus_olivater’, ‘host_speciess__Vulpes_vulpes’, ‘host_speciess__Zonotrichia_capensis’
 
 # ordistep
 step_r2_all = ordiR2step(mod0_all, scope = formula(mod1_all), perm.max = 200, na.action = na.exclude) #mod1_all has collinear variables
 print(step_r2_all)
+# + host_species AIC = 2894.7, F = 1.783, p = 0.002
 
 # _ mammals ----
 # by species 
@@ -582,7 +583,7 @@ print(aov_rda_social_mammals) #p = 0.001
 RsquareAdj(rda_social_mammals) #adj R^2 = 0.02098
 
 # model selection
-mod0_mammals = capscale(df_otus_sub_mammals ~ 1, data = df_metadata_sub_mammals, na.action = na.exclude)
+mod0_mammals = capscale(df_otus_sub_mammals ~ 1, data = df_metadata_sub_mammals, distance = "robust.aitchison", na.action = na.exclude)
 mod1_mammals = capscale(formula = df_otus_sub_mammals ~ host_species + basic_diet + basic_sociality, data = df_metadata_sub_mammals,  distance = "robust.aitchison", na.action = na.exclude) #some collinearity
 
 # ordistep
@@ -610,7 +611,7 @@ RsquareAdj(rda_social_birds) #adj R^2 = 0.02076328
 
 # _ model selection
 # run null and full models
-mod0_birds = capscale(df_otus_sub_birds ~ 1, data = df_metadata_sub_birds, na.action = na.exclude)
+mod0_birds = capscale(df_otus_sub_birds ~ 1, data = df_metadata_sub_birds, distance = "robust.aitchison", na.action = na.exclude)
 mod1_birds = capscale(formula = df_otus_sub_birds ~ host_species + basic_diet + basic_sociality, data = df_metadata_sub_birds,  distance = "robust.aitchison", na.action = na.exclude)
 
 # ordistep
@@ -631,21 +632,22 @@ rda_scores_sp_df = rda_sp_all |>
 gg_ordiplot(rda_sp_all, groups = df_metadata_sub$host_species, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 4.35%, CAP2 1.39%
 
 rda_scores_sp_df |> 
-  ggplot(aes(x = CAP1, y = CAP2, colour = host_species, shape = basic_diet)) +
+  ggplot(aes(x = CAP1, y = CAP2, colour = host_species, shape = host_class)) +
   geom_point(size = 2) +
   geom_vline(xintercept = 0, linetype = "dotted") + 
   geom_hline(yintercept = 0, linetype = "dotted") +
   scale_colour_viridis_d() +
+  scale_shape_manual(values = c("c__Aves" = 16, "c__Mammalia" = 17), labels = c("Aves", "Mammalia")) +
   labs(
     colour = "host species", 
-    shape = "diet",
+    shape = "host class",
     x = "CAP1 (4.35%)", 
     y = "CAP2 (1.39%)"
   ) +
-  theme(
-    text = element_text(size = 14), 
-    legend.position = "none") +
-  ggtitle("A (species)")
+  theme(text = element_text(size = 14),
+        legend.text = element_text(size = 14)) +
+  guides(colour = "none") +
+  ggtitle("A")
 
 # diet
 rda_scores_diet_df = rda_diet_all |> 
@@ -658,23 +660,21 @@ rda_scores_diet_df = rda_diet_all |>
 gg_ordiplot(rda_diet_all, groups = df_metadata_sub$basic_diet, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 1.13%, CAP2 0.67%
 
 rda_scores_diet_df |> 
-  ggplot(aes(x = CAP1, y = CAP2, colour = basic_diet, shape = basic_sociality)) +
-  geom_point() +
+  ggplot(aes(x = CAP1, y = CAP2, colour = basic_diet, shape = host_class)) +
+  geom_point(size = 2) +
   geom_vline(xintercept = 0, linetype = "dotted") + 
   geom_hline(yintercept = 0, linetype = "dotted") +
   scale_colour_viridis_d() +
+  scale_shape_manual(values = c("c__Aves" = 16, "c__Mammalia" = 17), labels = c("Aves", "Mammalia")) +
   labs(
     colour = "diet", 
-    shape = "sociality",
+    shape = "host class",
     x = "CAP1 (1.13%)", 
     y = "CAP2 (0.67%)"
   ) +
-  theme(
-    legend.text = element_text(size = 14), 
-    legend.title = element_text(size = 14),
-    axis.title = element_text(size = 14)
-  ) +
-  ggtitle("B (diet)")
+  theme(text = element_text(size = 14),
+    legend.text = element_text(size = 14)) +
+  ggtitle("B")
 
 # sociality
 rda_scores_social_df = rda_social_all |> 
@@ -687,23 +687,21 @@ rda_scores_social_df = rda_social_all |>
 gg_ordiplot(rda_social_all, groups = df_metadata_sub$basic_sociality, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 1.66%, CAP2 0.52%
 
 rda_scores_social_df |> 
-  ggplot(aes(x = CAP1, y = CAP2, shape = basic_sociality, colour = host_class)) +
-  geom_point() +
+  ggplot(aes(x = CAP1, y = CAP2, colour = basic_sociality, shape = host_class)) +
+  geom_point(size = 2) +
   geom_vline(xintercept = 0, linetype = "dotted") + 
   geom_hline(yintercept = 0, linetype = "dotted") +
   scale_colour_viridis_d() +
+  scale_shape_manual(values = c("c__Aves" = 16, "c__Mammalia" = 17), labels = c("Aves", "Mammalia")) +
   labs(
-    shape = "sociality", 
-    colour = "order",
+    colour = "sociality", 
+    shape = "order",
     x = "CAP1 (1.66%)", 
     y = "CAP2 (0.52%)"
   ) +
-  theme(
-    legend.text = element_text(size = 14), 
-    legend.title = element_text(size = 14),
-    axis.title = element_text(size = 14)
-  ) +
-  ggtitle("C (sociality)")
+  theme(text = element_text(size = 14),
+        legend.text = element_text(size = 14)) +
+  ggtitle("C")
 
 # _ plot mammals ----
 # species
@@ -878,7 +876,7 @@ rda_scores_social_birds_df |>
   ggtitle("C (birds)")
 
 
-# SERVER diff ab ----
+## diff ab ----
 # _ setup ----
 # all
 df_metadata_sub_da = df_metadata_sub |> 
@@ -922,26 +920,30 @@ df_otus_sub_birds_da = df_otus_sub |>
   column_to_rownames("rowname") |>
   select(where(~ sum(.) != 0))
 
-# _ all hosts ----
+# _ SERVER ----
+# _ all hosts
 v_social_da = df_metadata_sub_da |> pull(basic_sociality)
 social_clr = aldex.clr(t(df_otus_sub_da), v_social_da, mc.samples = 200) #do not run on laptop
 social_ttest = aldex.ttest(social_clr) #do not run on laptop
 aldex_social_effect = aldex.effect(social_clr, CI = TRUE)
 social_aldex_all = data.frame(social_ttest, aldex_social_effect)
+social_aldex_all = social_aldex_all |> rownames_to_column()
 
-# _ mammals ----
+# _ mammals
 v_social_da_mammals = df_metadata_sub_mammals_da |> pull(basic_sociality)
 social_clr_mammals = aldex.clr(t(df_otus_sub_mammals_da), v_social_da_mammals, mc.samples = 200)
 social_ttest_mammals = aldex.ttest(social_clr_mammals)
 aldex_social_effect_mammals = aldex.effect(social_clr_mammals, CI = TRUE)
 social_aldex_mammals = data.frame(social_ttest_mammals, aldex_social_effect_mammals)
+social_aldex_mammals = social_aldex_mammals |> rownames_to_column()
 
-# _ birds ----
+# _ birds
 v_social_da_birds = df_metadata_sub_birds_da |> pull(basic_sociality)
 social_clr_birds = aldex.clr(t(df_otus_sub_birds_da), v_social_da_birds, mc.samples = 200)
 social_ttest_birds = aldex.ttest(social_clr_birds)
 aldex_social_effect_birds = aldex.effect(social_clr_birds, CI = TRUE)
 social_aldex_birds = data.frame(social_ttest_birds, aldex_social_effect_birds)
+social_aldex_birds = social_aldex_birds |> rownames_to_column()
 
 write_csv(social_aldex_all, "social_aldex_all.csv")
 write_csv(social_aldex_mammals, "social_aldex_mammals.csv")
@@ -949,6 +951,10 @@ write_csv(social_aldex_birds, "social_aldex_birds.csv")
 
 save(social_aldex_all, social_aldex_mammals, social_aldex_birds, file = "diff_ab_data.RData")
 
+# _ data input ----
+social_aldex_all = read_csv("social_aldex_all.csv")
+social_aldex_mammals = read_csv("social_aldex_mammals.csv")
+social_aldex_birds = read_csv("social_aldex_birds.csv")
 
 # _ plots ----
 par(mfrow = c(1,2))
