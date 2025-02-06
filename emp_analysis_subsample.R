@@ -539,6 +539,7 @@ dissimilarity_table_birds |>
 glm_diss_mammals = lmer(diss ~ basic_sociality + (1|host_species_1), data = dissimilarity_table_mammals)
 summary(glm_diss_mammals)
 jtools::summ(glm_diss_mammals) #Error: vector memory limit of 16.0 Gb reached, see mem.maxVSize()
+#server results solitary β = -0.41, SE = 3.91, t = -0.11, p = 0.39; social: β = -3.25, SE = 3.72, t = -0.87, p = 0.92
 
 glm_diss_birds = lmer(diss ~ basic_sociality + (1|host_species_1), data = dissimilarity_table_birds)
 summary(glm_diss_birds)
@@ -937,7 +938,7 @@ df_otus_sub_birds_da = df_otus_sub |>
 # _ SERVER ----
 # _ all hosts
 v_social_da = df_metadata_sub_da |> pull(basic_sociality)
-social_clr = aldex.clr(t(df_otus_sub_da), v_social_da, mc.samples = 200) #do not run on laptop
+social_clr = aldex.clr(t(df_otus_sub_da), v_social_da, mc.samples = 200) #basic_sociality is a character vector, so aldex sorts it alphabetically -> social is the reference group
 social_ttest = aldex.ttest(social_clr) #do not run on laptop
 aldex_social_effect = aldex.effect(social_clr, CI = TRUE)
 social_aldex_all = data.frame(social_ttest, aldex_social_effect)
@@ -978,23 +979,33 @@ aldex.plot(social_aldex_all, type = "MW", test = "welch", main = "effect plot")
 # identify OTUs by name
 taxonomy_table = p_tax |> as.data.frame() |> rownames_to_column()
 
-# generate df of differentially abundant ASVs
-# mammals only, since there are none in birds (but keep the code for birds below)
+# generate df of differentially abundant OTUs
 social_diff_asvs_mammals = social_aldex_mammals |> 
-  filter(we.eBH < 0.05) |> 
+  filter(we.eBH < 0.001) |> 
   rownames_to_column("...1") |> 
   left_join(taxonomy_table, by = "rowname") |> # add ASV taxonomical info
   replace_na(list(genus = "")) |>
   replace_na(list(species = "sp.")) |>
-  mutate(otu_scientific_name = paste(genus, species, sep = " ")) |> #concatenate to full ASV name
-  mutate(otu_scientific_name = str_trim(otu_scientific_name, side = "left")) |>
-  mutate(otu_scientific_name = as.factor(otu_scientific_name)) |> 
+  mutate(across(c("genus"), substr, 6, nchar(genus))) |> 
+  mutate(across(c("species"), substr, 6, nchar(species))) |> 
   mutate(ci_product = effect.low * effect.high ) |> #column that returns TRUE if CI does not contain 0# |> 
   mutate(ci_no_zero = ci_product > 0) #returns TRUE if CI does not include zero
 
+social_diff_asvs_mammals |> 
+  ggplot(aes(x = effect, y = reorder(species, (effect*-1)), colour = phylum)) +
+  geom_point(size = 2.5) +
+  scale_colour_viridis_d(labels = c("Actinobacteria", "Bacteroidetes", "Firmicutes", "Proteobacteria")) +
+  xlab("effect size") +
+  ylab("OTU") +
+  theme(axis.text.y = element_text(face = "italic"),
+        text = element_text(size = 14)) +
+  #ggtitle("Differentially abundant OTUs in mammals,\nsocial v solitary\n(BH-corrected)") + 
+  geom_vline(xintercept = 0, linetype = "dotted")
+# since social is the reference group, effect < 0 means OTU is higher in social
+
 # birds
 social_diff_asvs_birds = social_aldex_birds |>
-  filter(we.eBH < 0.05) |> 
+  filter(we.eBH < 0.05) |> #we.eBH = expected Benjamini-Hochberg corrected p-value of Welch’s t test (higher p still yields 0 differentially abundant OTUs)
   rownames_to_column("...1") |> 
   left_join(taxonomy_table, by = "rowname") |> # add ASV taxonomical info
   replace_na(list(genus = "")) |>
@@ -1005,13 +1016,3 @@ social_diff_asvs_birds = social_aldex_birds |>
   mutate(ci_product = effect.low * effect.high ) |> #column that returns TRUE if CI does not contain 0# |> 
   mutate(ci_no_zero = ci_product > 0) #returns TRUE if CI does not include zero
 #there are no differentially abundant OTUs in birds
-
-social_diff_asvs_mammals |> 
-  ggplot(aes(x = effect, y = reorder(otu_scientific_name, (effect*-1)), colour = phylum)) +
-  geom_point() +
-  xlab("Effect size") +
-  ylab("ASV") +
-  theme(axis.text.y = element_text(face = "italic")) +
-  ggtitle("Differentially abundant ASVs in mammals\nSocial and solitary\n(BH-corrected)") + 
-  geom_vline(xintercept = 0, linetype = "dotted")
-
