@@ -19,6 +19,7 @@ library(ALDEx2)
 theme_set(theme_classic())
 filter = dplyr::filter
 select = dplyr::select
+conflicts_prefer(dplyr::slice)
 
 ## file input ----
 load(file = "emp_analysis_data_2025_02_03.RData") #this dataset has been modified to omit 1 reptile species, black bear, colobine primates
@@ -179,30 +180,60 @@ otus_per_sample_birds |> summarise(mean(total_otus), median(total_otus), max(tot
 wilcox.test(total_otus ~ host_class, data = otus_per_sample) #W = 6841, p-value = 0.0001415
 
 ## relative abundances ---- 
-# _ SERVER plots ----
+# _ all ----
 # normalize number of reads using median sequencing depth
 total = median(sample_sums(ps_sub))
 standf = function(x, t = total) round(t * (x / sum(x)))
 ps_norm = transform_sample_counts(ps_sub, standf)
 
-# plot relative abundances per class (run mammals on server)
-# mammals - does not run on laptop
+# mammals
 total_mammals = median(sample_sums(ps_mammals_sub))
 standf = function(x, t = total_mammals) round(t * (x / sum(x)))
 ps_norm_mammals = transform_sample_counts(ps_mammals_sub, standf)
 
-relab_mammals = plot_bar(ps_norm_mammals, fill = "phylum") +
-  geom_bar(aes(colour = phylum, fill = phylum), stat = "identity", position = "stack") +
-  theme(legend.position = "none") #+ facet_grid(~ host_order)
+# SERVER ----
+# mammals rel ab plot on server 
 
 # birds
 total_birds = median(sample_sums(ps_birds_sub))
 standf = function(x, t = total_birds) round(t * (x / sum(x)))
 ps_norm_birds = transform_sample_counts(ps_birds_sub, standf)
 
-relab_birds = plot_bar(ps_norm_birds, fill = "phylum") +
-  geom_bar(aes(colour = phylum, fill = phylum), stat = "identity", position = "stack") +
-  theme(legend.position = "none") #+ facet_grid(~ host_order)
+# convert ps to a tidy data frame
+relab_birds_df = ps_norm_birds |>
+  psmelt() |>
+  group_by(Sample, phylum) |>
+  summarize(Abundance = sum(Abundance), .groups = "drop") |>
+  mutate(RelativeAbundance = Abundance / sum(Abundance))
+
+# get top 10 phyla
+top_phyla_birds = relab_birds_df |>
+  group_by(phylum) |>
+  summarize(TotalAbundance = sum(Abundance), .groups = "drop") |>
+  arrange(desc(TotalAbundance)) |>
+  slice_head(n = 10) |>
+  pull(phylum)
+
+# reclassify other phyla as "Other"
+relab_birds_df = relab_birds_df |>
+  mutate(phylum = ifelse(phylum %in% top_phyla_birds, phylum, "Other"))
+
+# recalculate relative abundances with new categories
+relab_birds_df = relab_birds_df |>
+  group_by(Sample, phylum) |>
+  summarize(Abundance = sum(Abundance), .groups = "drop") |>
+  mutate(RelativeAbundance = Abundance / sum(Abundance))
+
+# plot
+plot_relab_birds = ggplot(relab_birds_df, aes(x = Sample, y = RelativeAbundance, fill = phylum)) +
+  geom_bar(stat = "identity", position = "stack") +
+  xlab("sample") +
+  ylab("relative abundance") +
+  theme(axis.text.x = element_blank(),
+        text = element_text(size = 14)) +
+  scale_fill_viridis_d(labels = c("Actinobacteria", "Bacteroidetes", "Cyanobacteria", "Firmicutes", "Lentisphaerae", "Planctomycetes", "Proteobacteria", "Spirochaetae", "Tenericutes", "Verrucomicrobia", "Other"))
+
+plot_relab_birds
 
 # _ dominant taxa ----
 # all
@@ -520,7 +551,7 @@ RsquareAdj(rda_diet_all) #adj R^2 = 0.01276794
 rda_social_all = capscale(formula = df_otus_sub ~ basic_sociality, data = df_metadata_sub,  distance = "robust.aitchison", na.action = na.exclude)
 aov_rda_social_all = anova(rda_social_all)
 print(aov_rda_diet_all) #p = 0.001
-RsquareAdj(rda_social_all)#ajd R^2 = 0.01653155
+RsquareAdj(rda_social_all) #ajd R^2 = 0.01653155
 
 # _ model selection
 # run null and full models
