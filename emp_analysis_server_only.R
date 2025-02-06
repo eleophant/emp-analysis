@@ -125,20 +125,27 @@ social_clr = aldex.clr(t(df_otus_sub_da), v_social_da, mc.samples = 200) #do not
 social_ttest = aldex.ttest(social_clr) #do not run on laptop
 aldex_social_effect = aldex.effect(social_clr, CI = TRUE)
 social_aldex_all = data.frame(social_ttest, aldex_social_effect)
+social_aldex_all = social_aldex_all |> rownames_to_column()
 
-# _ mammals ----
+# _ mammals
 v_social_da_mammals = df_metadata_sub_mammals_da |> pull(basic_sociality)
 social_clr_mammals = aldex.clr(t(df_otus_sub_mammals_da), v_social_da_mammals, mc.samples = 200)
 social_ttest_mammals = aldex.ttest(social_clr_mammals)
 aldex_social_effect_mammals = aldex.effect(social_clr_mammals, CI = TRUE)
 social_aldex_mammals = data.frame(social_ttest_mammals, aldex_social_effect_mammals)
+social_aldex_mammals = social_aldex_mammals |> rownames_to_column()
 
-# _ birds ----
+# _ birds
 v_social_da_birds = df_metadata_sub_birds_da |> pull(basic_sociality)
 social_clr_birds = aldex.clr(t(df_otus_sub_birds_da), v_social_da_birds, mc.samples = 200)
 social_ttest_birds = aldex.ttest(social_clr_birds)
 aldex_social_effect_birds = aldex.effect(social_clr_birds, CI = TRUE)
 social_aldex_birds = data.frame(social_ttest_birds, aldex_social_effect_birds)
+social_aldex_birds = social_aldex_birds |> rownames_to_column()
+
+write_csv(social_aldex_all, "social_aldex_all.csv")
+write_csv(social_aldex_mammals, "social_aldex_mammals.csv")
+write_csv(social_aldex_birds, "social_aldex_birds.csv")
 
 write_csv(social_aldex_all, "social_aldex_all.csv")
 write_csv(social_aldex_mammals, "social_aldex_mammals.csv")
