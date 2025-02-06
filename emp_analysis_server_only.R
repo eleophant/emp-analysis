@@ -147,8 +147,4 @@ write_csv(social_aldex_all, "social_aldex_all.csv")
 write_csv(social_aldex_mammals, "social_aldex_mammals.csv")
 write_csv(social_aldex_birds, "social_aldex_birds.csv")
 
-write_csv(social_aldex_all, "social_aldex_all.csv")
-write_csv(social_aldex_mammals, "social_aldex_mammals.csv")
-write_csv(social_aldex_birds, "social_aldex_birds.csv")
-
 save.image("emp_analysis_server_only_results.RData")
