@@ -10,6 +10,8 @@ library(conflicted)
 library(viridis)
 library(phyloseq)
 library(fantaxtic)
+library(rotl)
+library(ape)
 library(ggpubr)
 library(patchwork)
 library(ggordiplots)
@@ -269,6 +271,54 @@ fantaxtic::top_taxa(ps_birds_sub, n = 5, tax_level = "class")
 #Bacilli 0.211, Clostridia 0.175, Gammaproteobacteria 0.173, Alphaproteobacteria 0.0730, Betaproteobacteria 0.0645
 
 ## alpha div ----
+# _ all variables ----
+# fix metadata to match OTL
+df_metadata = df_metadata %>%
+  mutate(
+    host_scientific_name = case_when(
+      host_scientific_name == "Proteles cristatus" ~ "Proteles cristata",
+      host_scientific_name == "Thraupis palmarum" ~ "Tangara palmarum",
+      grepl(" sp\\.$", host_scientific_name) ~ sub(" sp\\.$", "", host_scientific_name), #resolve Genus sp. to just Genus
+      TRUE ~ host_scientific_name #leave everything else unchanged
+    )
+  )
+
+# build tree from species in df_metadata
+host_phylo = df_metadata %>%
+  pull(host_scientific_name) %>% # extract host scientific names
+  unique() %>% # keep only unique names
+  gsub(" sp\\.?$", "", .) %>% # collapse "Genus sp." to "Genus"
+  tnrs_match_names() %>% # match names to Open Tree taxonomy
+  filter(!is.na(ott_id)) %>% # drop unmatched taxa
+  pull(ott_id) %>% # extract OTT IDs
+  tol_induced_subtree(ott_ids = .) %>% # build induced subtree
+  compute.brlen() # add branch lengths if missing
+
+# plot & check tip labels
+ape::plot.phylo(host_phylo, cex = 0.6)
+head(host_phylo$tip.label)
+
+# remove OTT suffix from tip labels
+host_phylo$tip.label = host_phylo$tip.label %>%
+  gsub("_ott[0-9]+$", "", .) %>% #remove "_ottXXXX" suffix
+  gsub("_", " ", .) %>% #replace underscores with spaces
+  trimws() #remove any stray whitespaces 
+
+head(host_phylo$tip.label) #check: now just "Genus species"
+
+all(df_metadata$host_scientific_name %in% host_phylo$tip.label) #FALSE
+setdiff(df_metadata$host_scientific_name, host_phylo$tip.label) #"Macropus"
+
+# fix those
+df_metadata = df_metadata |> 
+  mutate(host_scientific_name = case_when(
+    host_scientific_name == "Proteles cristatus" ~ "Proteles cristata",   # typo fix
+    grepl(" sp\\.$", host_scientific_name) ~ sub(" sp\\.$", "", host_scientific_name),  # collapse "Genus sp." to "Genus"
+    TRUE ~ host_scientific_name
+  ))
+
+
+
 # _ class ----
 comparisons_class = list(c("c__Aves", "c__Mammalia"))
 
