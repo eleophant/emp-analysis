@@ -271,28 +271,32 @@ fantaxtic::top_taxa(ps_birds_sub, n = 5, tax_level = "class")
 #Bacilli 0.211, Clostridia 0.175, Gammaproteobacteria 0.173, Alphaproteobacteria 0.0730, Betaproteobacteria 0.0645
 
 ## alpha div ----
-# _ all variables ----
+# _ PGLMM ----
 # fix metadata to match OTL
-df_metadata = df_metadata %>%
+df_metadata_tree <- df_metadata %>%
+  # remove "Genus sp."
+  filter(host_scientific_name != "Anser sp." & 
+           host_scientific_name != "Macropus sp.") %>% 
+  # fix synonyms 
   mutate(
     host_scientific_name = case_when(
       host_scientific_name == "Proteles cristatus" ~ "Proteles cristata",
       host_scientific_name == "Thraupis palmarum" ~ "Tangara palmarum",
-      grepl(" sp\\.$", host_scientific_name) ~ sub(" sp\\.$", "", host_scientific_name), #resolve Genus sp. to just Genus
-      TRUE ~ host_scientific_name #leave everything else unchanged
+      TRUE ~ host_scientific_name
     )
   )
 
-# build tree from species in df_metadata
-host_phylo = df_metadata %>%
-  pull(host_scientific_name) %>% # extract host scientific names
-  unique() %>% # keep only unique names
-  gsub(" sp\\.?$", "", .) %>% # collapse "Genus sp." to "Genus"
-  tnrs_match_names() %>% # match names to Open Tree taxonomy
-  filter(!is.na(ott_id)) %>% # drop unmatched taxa
-  pull(ott_id) %>% # extract OTT IDs
-  tol_induced_subtree(ott_ids = .) %>% # build induced subtree
-  compute.brlen() # add branch lengths if missing
+# get OTT IDs for all EMP hosts
+ott_ids <- df_metadata_tree %>%
+  pull(host_scientific_name) %>% # extract host names
+  unique() %>% # remove duplicates
+  tnrs_match_names() %>% # match to OpenTree
+  pull(ott_id) # extract OTT IDs
+
+
+# build tree from species in df_metadata_tree
+host_phylo <- tol_induced_subtree(ott_ids = ott_ids) %>%
+  compute.brlen()
 
 # plot & check tip labels
 ape::plot.phylo(host_phylo, cex = 0.6)
@@ -304,20 +308,52 @@ host_phylo$tip.label = host_phylo$tip.label %>%
   gsub("_", " ", .) %>% #replace underscores with spaces
   trimws() #remove any stray whitespaces 
 
-head(host_phylo$tip.label) #check: now just "Genus species"
+# check tip labels again
+head(host_phylo$tip.label) #now just "Genus species"
+ape::plot.phylo(host_phylo, cex = 0.6)
 
-all(df_metadata$host_scientific_name %in% host_phylo$tip.label) #FALSE
-setdiff(df_metadata$host_scientific_name, host_phylo$tip.label) #"Macropus"
+all(df_metadata_tree$host_scientific_name %in% host_phylo$tip.label) #TRUE
 
-# fix those
-df_metadata = df_metadata |> 
-  mutate(host_scientific_name = case_when(
-    host_scientific_name == "Proteles cristatus" ~ "Proteles cristata",   # typo fix
-    grepl(" sp\\.$", host_scientific_name) ~ sub(" sp\\.$", "", host_scientific_name),  # collapse "Genus sp." to "Genus"
-    TRUE ~ host_scientific_name
-  ))
+# run PGLMMs with host phylo control
+# Obs OTUs
+model_obs_otus = pglmm(
+  adiv_observed_otus ~ basic_sociality + (1|host_scientific_name),
+  data = df_metadata2,
+  family = "gaussian",
+  cov_ranef = list(host_scientific_name = host_phylo)
+)
 
+model_obs_otus # not sig
 
+# Chao1
+model_adiv_chao1 = pglmm(
+  adiv_observed_otus ~ basic_sociality + (1|host_scientific_name),
+  data = df_metadata2,
+  family = "gaussian",
+  cov_ranef = list(host_scientific_name = host_phylo)
+)
+
+model_adiv_chao1 # not sig
+
+# Shannon
+model_adiv_shannon = pglmm(
+  adiv_observed_otus ~ basic_sociality + (1|host_scientific_name),
+  data = df_metadata2,
+  family = "gaussian",
+  cov_ranef = list(host_scientific_name = host_phylo)
+)
+
+model_adiv_shannon # not sig
+
+# Faith
+model_adiv_faith = pglmm(
+  adiv_observed_otus ~ basic_sociality + (1|host_scientific_name),
+  data = df_metadata2,
+  family = "gaussian",
+  cov_ranef = list(host_scientific_name = host_phylo)
+)
+
+model_adiv_faith # not sig
 
 # _ class ----
 comparisons_class = list(c("c__Aves", "c__Mammalia"))
