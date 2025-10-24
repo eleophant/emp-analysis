@@ -12,6 +12,7 @@ library(phyloseq)
 library(fantaxtic)
 library(rotl)
 library(ape)
+library(phyr)
 library(ggpubr)
 library(patchwork)
 library(ggordiplots)
@@ -181,6 +182,24 @@ otus_per_sample_birds |> summarise(mean(total_otus), median(total_otus), max(tot
 # _ stats ----
 wilcox.test(total_otus ~ host_class, data = otus_per_sample) #W = 6841, p-value = 0.0001415
 
+## describing OTUs ----
+# find (Limosi)lactobacillus and Bifidobacterium in df_otus
+otu_tax = ps_sub %>% tax_table() # extract from phyloseq object
+df_tax = otu_tax2 %>%
+  as(., "matrix") %>%
+  as.data.frame()
+
+# Bifidobacterium
+df_tax %>% filter(genus == "D_5__Bifidobacterium") %>% 
+  summarise(n = n()) # 14 Bifido species
+
+#Limosilactibacillus
+df_tax %>% filter(genus == "D_5__Lactobacillus") %>% 
+  summarise(n = n()) # 226 Bifido species
+
+# TODO #### 
+# proportion of sequences that are Bifido & Lactobac?
+
 ## relative abundances ---- 
 # _ all ----
 # normalize number of reads using median sequencing depth
@@ -272,8 +291,9 @@ fantaxtic::top_taxa(ps_birds_sub, n = 5, tax_level = "class")
 
 ## alpha div ----
 # _ PGLMM ----
+# __ setup ----
 # fix metadata to match OTL
-df_metadata_tree <- df_metadata %>%
+df_metadata_tree <- df_metadata_sub %>%
   # remove "Genus sp."
   filter(host_scientific_name != "Anser sp." & 
            host_scientific_name != "Macropus sp.") %>% 
@@ -304,60 +324,56 @@ head(host_phylo$tip.label)
 
 # remove OTT suffix from tip labels
 host_phylo$tip.label = host_phylo$tip.label %>%
-  gsub("_ott[0-9]+$", "", .) %>% #remove "_ottXXXX" suffix
-  gsub("_", " ", .) %>% #replace underscores with spaces
-  trimws() #remove any stray whitespaces 
+  gsub("_ott[0-9]+$", "", .) %>% # remove "_ottXXXX" suffix
+  gsub("_", " ", .) %>% # replace underscores with spaces
+  trimws() # remove any stray whitespaces 
 
-# check tip labels again
-head(host_phylo$tip.label) #now just "Genus species"
+# re-check tip labels
+head(host_phylo$tip.label) # now just "Genus species"
 ape::plot.phylo(host_phylo, cex = 0.6)
 
 all(df_metadata_tree$host_scientific_name %in% host_phylo$tip.label) #TRUE
 
-# run PGLMMs with host phylo control
-# Obs OTUs
-model_obs_otus = pglmm(
+# __ models ----
+# models for each metric
+model_adiv_observed <- pglmm(
   adiv_observed_otus ~ basic_sociality + (1|host_scientific_name),
-  data = df_metadata2,
+  data = df_metadata_sub,
   family = "gaussian",
   cov_ranef = list(host_scientific_name = host_phylo)
 )
 
-model_obs_otus # not sig
-
-# Chao1
-model_adiv_chao1 = pglmm(
-  adiv_observed_otus ~ basic_sociality + (1|host_scientific_name),
-  data = df_metadata2,
+model_adiv_chao1 <- pglmm(
+  adiv_chao1 ~ basic_sociality + (1|host_scientific_name),
+  data = df_metadata_sub,
   family = "gaussian",
   cov_ranef = list(host_scientific_name = host_phylo)
 )
 
-model_adiv_chao1 # not sig
-
-# Shannon
-model_adiv_shannon = pglmm(
-  adiv_observed_otus ~ basic_sociality + (1|host_scientific_name),
-  data = df_metadata2,
+model_adiv_shannon <- pglmm(
+  adiv_shannon ~ basic_sociality + (1|host_scientific_name),
+  data = df_metadata_sub,
   family = "gaussian",
   cov_ranef = list(host_scientific_name = host_phylo)
 )
 
-model_adiv_shannon # not sig
-
-# Faith
-model_adiv_faith = pglmm(
-  adiv_observed_otus ~ basic_sociality + (1|host_scientific_name),
-  data = df_metadata2,
+model_adiv_faith <- pglmm(
+  adiv_faith_pd ~ basic_sociality + (1|host_scientific_name),
+  data = df_metadata_sub,
   family = "gaussian",
   cov_ranef = list(host_scientific_name = host_phylo)
 )
 
-model_adiv_faith # not sig
+# inspect results
+summary(model_adiv_observed)
+summary(model_adiv_chao1)
+summary(model_adiv_shannon)
+summary(model_adiv_faith)
 
-# _ class ----
+# _ plots ----
 comparisons_class = list(c("c__Aves", "c__Mammalia"))
 
+# __ host class ----
 # obs OTUs
 class_obs = df_metadata_sub |>
   ggplot(aes(x = host_class, y = adiv_observed_otus, fill = host_class)) +
@@ -412,56 +428,7 @@ class_faith = df_metadata_sub |>
 combined_class_plot = (class_obs | class_chao) / (class_shannon | class_faith)
 combined_class_plot
 
-# _ species ----
-# obs OTUs
-kruskal.test(adiv_observed_otus ~ host_species, data = df_metadata_sub) #KW chi-squared = 156.7, df = 44, p-value = 1.488e-14
-
-# chao
-kruskal.test(adiv_chao1 ~ host_species, data = df_metadata_sub) #KW chi-squared = 159.33, df = 44, p-value = 5.623e-15
-
-# shannon
-kruskal.test(adiv_shannon ~ host_species, data = df_metadata_sub) #KW chi-squared = 168.36, df = 44, p-value < 2.2e-16
-
-# faith
-kruskal.test(adiv_faith_pd ~ host_species, data = df_metadata_sub) #KW chi-squared = 142.04, df = 44, p-value = 2.991e-12
-
-# _ diet ----
-# obs OTUs
-kruskal.test(adiv_observed_otus ~ basic_diet, data = df_metadata_sub) #KW chi-squared = 11.4, df = 2, p-value = 0.003346
-
-# chao
-kruskal.test(adiv_chao1 ~ basic_diet, data = df_metadata_sub) #KW chi-squared = 12.91, df = 2, p-value = 0.001573
-
-# shannon
-kruskal.test(adiv_shannon ~ basic_diet, data = df_metadata_sub) #KW chi-squared = 9.4752, df = 2, p-value = 0.00876
-
-# faith
-kruskal.test(adiv_faith_pd ~ basic_diet, data = df_metadata_sub) #KW chi-squared = 8.7463, df = 2, p-value = 0.01261
-
-# diet is not independent of host phylogeny
-glm_diet_order = lmer(adiv_observed_otus ~ basic_diet + (1|host_order), data = df_metadata_sub)
-summary(glm_diet_order) #REML obs 4922.4, chao 5163.1, shannon 1342.7, faith 3101
-jtools::summ(glm_diet_order) #not significant for faith, obs_otus, chao1, shannon
-
-# _ sociality ----
-# obs OTUs
-kruskal.test(adiv_observed_otus ~ basic_sociality, data = df_metadata_sub) #KW chi-squared = 15.286, df = 2, p-value = 0.0004795
-
-# chao
-kruskal.test(adiv_chao1 ~ basic_sociality, data = df_metadata_sub) #KW chi-squared = 16.243, df = 2, p-value = 0.0002971
-
-# shannon
-kruskal.test(adiv_shannon ~ basic_sociality, data = df_metadata_sub) #KW chi-squared = 19.744, df = 2, p-value = 5.159e-05
-
-# faith
-kruskal.test(adiv_faith_pd ~ basic_sociality, data = df_metadata_sub) #KW chi-squared = 12.594, df = 2, p-value = 0.001842
-
-# sociality is not independent of host phylogeny
-glm_soc_order = lmer(adiv_faith_pd ~ basic_sociality + (1|host_species), data = df_metadata_sub)
-summary(glm_soc_order) #REML obs 4922.9, chao 5163.6, shannon 1342.4, faith 3118.9
-jtools::summ(glm_soc_order) #not significant for faith, obs_otus, chao1, shannon
-
-# plots
+# __ sociality ---- 
 sociality_order = c("solitary", "intermediate", "social")
 df_metadata_sub$basic_sociality = factor(df_metadata_sub$basic_sociality, levels = sociality_order)
 
@@ -655,12 +622,18 @@ print(aov_rda_diet_all) # p = 0.001
 RsquareAdj(rda_social_all) #ajd R^2 = 0.01653155
 
 # _ model selection
+## TO DO: add study_id as a random effect ####
+
 # run null and full models
 mod0_all = capscale(df_otus_sub ~ 1, data = df_metadata_sub, distance = "robust.aitchison", na.action = na.exclude)
-mod1_all = capscale(formula = df_otus_sub ~ host_species + basic_diet + basic_sociality, data = df_metadata_sub,  distance = "robust.aitchison", na.action = na.exclude) #Some constraints or conditions were aliased because they were redundant. This can happen if terms are linearly dependent (collinear): ‘host_speciess__Turdus_olivater’, ‘host_speciess__Vulpes_vulpes’, ‘host_speciess__Zonotrichia_capensis’
+mod1_all = capscale(formula = df_otus_sub ~ host_species + basic_diet + basic_sociality + study_id, data = df_metadata_sub,  distance = "robust.aitchison", na.action = na.exclude) #Some constraints or conditions were aliased because they were redundant. This can happen if terms are linearly dependent (collinear): ‘basic_dietherbivorous’, 'basic_dietomnivorous’, ‘basic_socialitysolitary’
 
+## TO DO ####
 # ordistep
-step_r2_all = ordiR2step(mod0_all, scope = formula(mod1_all), perm.max = 200, na.action = na.exclude) #mod1_all has collinear variables
+step_all = ordistep(mod0_all, scope = formula(mod1_all), direction = "both", perm.max = 200, na.action = na.exclude) #mod1_all has collinear variables
+
+# ordiR2step
+step_r2_all = ordiR2step(mod0_all, scope = formula(mod1_all), direction = "both", perm.max = 200, na.action = na.exclude) #mod1_all has collinear variables
 print(step_r2_all)
 # + host_species AIC = 2894.7, F = 1.783, p = 0.002
 
