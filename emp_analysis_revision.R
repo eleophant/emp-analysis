@@ -1,18 +1,20 @@
-################################
+########################################
 #
 # EMP analysis on subsampled data
 #
 # Eleonore Lebeuf-Taylor
 #
-################################
+########################################
 
-## packages ----
+################ PACKAGES ################
+
 library(tidyverse)
 library(conflicted)
 library(viridis)
 library(phyloseq)
 library(fantaxtic)
 library(rotl)
+library(phytools)
 library(ape)
 library(phyr)
 library(ggpubr)
@@ -26,11 +28,13 @@ filter = dplyr::filter
 select = dplyr::select
 conflicts_prefer(dplyr::slice)
 
-## file input ----
+################ DATA INPUT ################
+
 load(file = "emp_analysis_data_2025_02_03.RData") #this dataset has been modified to omit 1 reptile species, black bear, colobine primates
 
-## subsampling ----
-# _ dfs ----
+################ SUBSAMPLING ################
+
+#### make dfs ####
 df_obs_n = df_metadata |> 
   group_by(host_species) |> 
   summarise(n = n()) |> 
@@ -61,7 +65,7 @@ df_metadata_sub = df_metadata_sub |>
   slice(match(rownames(df_otus_sub), rownames(df_metadata_sub)))
 all(rownames(df_otus_sub) == rownames(df_metadata_sub)) #TRUE
 
-# _ phyloseq ----
+#### phyloseq ####
 # set up metadata & otu table
 p_metadata_sub = sample_data(df_metadata_sub)
 p_otu_sub = otu_table(df_otus_sub, taxa_are_rows = FALSE)
@@ -73,7 +77,7 @@ all(sample_names(p_metadata_sub) == sample_names(p_otu_sub)) #TRUE
 physeq_sub = phyloseq(p_otu_sub, p_metadata_sub, p_tax)
 ps_sub = merge_phyloseq(physeq_sub, tree_emp)
 
-## subset classes ----
+#### subset classes ####
 # mammals
 df_metadata_sub_mammals = df_metadata_sub |>
   filter(host_class == "c__Mammalia")
@@ -108,8 +112,9 @@ all(rownames(df_otus_sub_birds) == rownames(df_metadata_sub_birds)) #TRUE
 ps_mammals_sub = subset_samples(ps_sub, host_class == "c__Mammalia")
 ps_birds_sub = subset_samples(ps_sub, host_class == "c__Aves")
 
-## descriptive stats ----
-# _ all ----
+################ DATA EXPLORATION ################
+
+#### all hosts ####
 df_metadata_sub |> nrow() #375 samples
 df_metadata_sub |> group_by(host_species) |> 
   summarise(n = n()) |> print(n = 100) #across 45 species
@@ -132,7 +137,7 @@ otus_per_sample = df_metadata_sub |>
 otus_per_sample |> summarise(mean(total_otus), median(total_otus), max(total_otus), min(total_otus))
 #mean 1019, median 961, max 2817, min 114
 
-# _ mammals ----
+#### mammals ####
 # collectively
 df_metadata_sub_mammals |> nrow() #312 samples
 df_metadata_sub_mammals |> group_by(host_species) |> 
@@ -156,8 +161,7 @@ otus_per_sample_mammals = df_metadata_sub_mammals |>
 otus_per_sample_mammals |> summarise(mean(total_otus), median(total_otus), max(total_otus), min(total_otus))
 #mean 1062, median 1004, max 2473, min 209
 
-# _ birds ----
-#collectively
+#### birds ####
 df_metadata_sub_birds |> nrow() #63 samples
 df_metadata_sub_birds |> group_by(host_species) |> 
   summarise(n = n()) |> print(n = 100) #across 10 species
@@ -181,12 +185,13 @@ otus_per_sample_birds = df_metadata_sub_birds |>
 otus_per_sample_birds |> summarise(mean(total_otus), median(total_otus), max(total_otus), min(total_otus))
 #mean 807, median 695, max 2817, min 114
 
-# _ stats ----
+#### compare classes ####
 wilcox.test(total_otus ~ host_class, data = otus_per_sample) #W = 6841, p-value = 0.0001415
 
-## describing OTUs ----
-# find (Limosi)lactobacillus and Bifidobacterium in df_otus
-otu_tax = ps_sub %>% tax_table() # extract from phyloseq object
+#### social OTUs ####
+# goal: find (Limosi)lactobacillus and Bifidobacterium in df_otus
+# extract otu tax table from phyloseq object
+otu_tax = ps_sub %>% tax_table()
 df_tax = otu_tax %>%
   as(., "matrix") %>%
   as.data.frame() %>%
@@ -196,41 +201,52 @@ df_tax = otu_tax %>%
 df_tax %>% filter(genus == "D_5__Bifidobacterium") %>% 
   summarise(n = n()) # 14 Bifido species
 
-# make list of Bifidobacterium IDs
+# make list of Bifidobacterium OTUs
 ls_bifido = df_tax %>%
   filter(genus == "D_5__Bifidobacterium") %>% 
   pull(rowname)
 
 #Limosilactibacillus
 df_tax %>% filter(genus == "D_5__Lactobacillus") %>% 
-  summarise(n = n()) # 226 Bifido species
+  summarise(n = n()) # 226 Limosilactobacillus species
 
-# make list of Limosilactobacillus IDs
+# make list of Limosilactobacillus OTUs
 ls_limosi = df_tax %>%
   filter(genus == "D_5__Lactobacillus") %>% 
   pull(rowname)
 
-# TODO #### 
-# proportion of sequences that are Bifido & Lactobac
+# total OTUs
 df_otus_sub %>% 
-  select(all_of(ls_bifido)) %>% 
-  mutate(sum = rowSums(across(where(is.numeric))))
+  sum() %>% # total = 13,085,267
 
+# Bifidobact OTUs
+df_otus_sub %>% 
+  select(all_of(ls_bifido)) %>%
+  summarise(across(everything(), ~ sum(., na.rm = TRUE))) %>% 
+  sum() # 2685
+# Bifido: 2685/13085267*100 = 0.02051926 %
 
-## relative abundances ---- 
-# _ all ----
+# Limosilact OTUs
+df_otus_sub %>% 
+  select(all_of(ls_limosi)) %>% # all Limosilact OTUs
+  summarise(across(everything(), ~ sum(., na.rm = TRUE))) %>% 
+  sum() # 59335
+# Limosilact: 59335/13085267*100 = 0.4534489 %
+
+#### relative abundances ####  
+####_ all hosts #### 
 # normalize number of reads using median sequencing depth
 total = median(sample_sums(ps_sub))
 standf = function(x, t = total) round(t * (x / sum(x)))
 ps_norm = transform_sample_counts(ps_sub, standf)
 
-# mammals
+####  _ mammals #### 
 total_mammals = median(sample_sums(ps_mammals_sub))
 standf = function(x, t = total_mammals) round(t * (x / sum(x)))
 ps_norm_mammals = transform_sample_counts(ps_mammals_sub, standf)
 
-# _ SERVER plot ----
-# mammals rel ab plot on server 
+# relative abundances plot - mammals
+# NB: to run on server only
 load("plot_relab_mammals.RData")
 
 plot_relab_mammals = relab_mammals_plot = ggplot(relab_mammals_df, aes(x = Sample, y = Abundance, fill = phylum)) +
@@ -244,7 +260,7 @@ plot_relab_mammals = relab_mammals_plot = ggplot(relab_mammals_df, aes(x = Sampl
 
 plot_relab_mammals
 
-# birds
+#### _ birds #### 
 total_birds = median(sample_sums(ps_birds_sub))
 standf = function(x, t = total_birds) round(t * (x / sum(x)))
 ps_norm_birds = transform_sample_counts(ps_birds_sub, standf)
@@ -274,7 +290,8 @@ relab_birds_df = relab_birds_df |>
   summarize(Abundance = sum(Abundance), .groups = "drop") |>
   mutate(RelativeAbundance = Abundance / sum(Abundance))
 
-# plot
+# relative abundances plot - birds
+# can run on local machine
 plot_relab_birds = ggplot(relab_birds_df, aes(x = Sample, y = Abundance, fill = phylum)) +
   geom_bar(stat = "identity", position = "stack") +
   xlab("sample") +
@@ -286,28 +303,31 @@ plot_relab_birds = ggplot(relab_birds_df, aes(x = Sample, y = Abundance, fill = 
 
 plot_relab_birds
 
-# _ dominant taxa ----
-# all
+#### dominant taxa #### 
+# all hosts
 fantaxtic::top_taxa(ps_sub, n = 3, tax_level = "phylum")
 #Firmicutes 0.395, Proteobacteria 0.316, Bacteroidetes 0.177
+
 fantaxtic::top_taxa(ps_sub, n = 5, tax_level = "class")
 #Clostridia 0.233, Gammaproteobacteria 0.169, Bacilli 0.150, Bacteroidia 0.0838, Alphaproteobacteria 0.0714
 
 # mammals
 fantaxtic::top_taxa(ps_mammals_sub, n = 3, tax_level = "phylum")
 #Firmicutes 0.395, Proteobacteria 0.311, Bacteroidetes 0.184
+
 fantaxtic::top_taxa(ps_mammals_sub, n = 5, tax_level = "class")
 #Clostridia 0.245, Gammaproteobacteria 0.168, Bacilli 0.137, Bacteroidia 0.0930, Alphaproteobacteria 0.0711
 
 # birds
 fantaxtic::top_taxa(ps_birds_sub, n = 3, tax_level = "phylum")
 #Firmicutes 0.396, Proteobacteria 0.338, Bacteroidetes 0.144)
+
 fantaxtic::top_taxa(ps_birds_sub, n = 5, tax_level = "class")
 #Bacilli 0.211, Clostridia 0.175, Gammaproteobacteria 0.173, Alphaproteobacteria 0.0730, Betaproteobacteria 0.0645
 
-## alpha div ----
-# _ PGLMM ----
-# __ setup ----
+################ HOST PHYLOGENY ################
+
+
 # fix metadata to match OTL
 df_metadata_tree <- df_metadata_sub %>%
   # remove "Genus sp."
@@ -329,7 +349,6 @@ ott_ids <- df_metadata_tree %>%
   tnrs_match_names() %>% # match to OpenTree
   pull(ott_id) # extract OTT IDs
 
-
 # build tree from species in df_metadata_tree
 host_phylo <- tol_induced_subtree(ott_ids = ott_ids) %>%
   compute.brlen()
@@ -350,7 +369,12 @@ ape::plot.phylo(host_phylo, cex = 0.6)
 
 all(df_metadata_tree$host_scientific_name %in% host_phylo$tip.label) #TRUE
 
-# __ models ----
+################ ALPHA DIVERSITY ################
+
+# run PGLMMs on alpha diversity metrics with sociality and diet as fixed effects and host phylogenetic distance as a random effect
+
+#### models ####
+
 # models for each metric
 model_adiv_observed <- pglmm(
   adiv_observed_otus ~ basic_sociality + (1|host_scientific_name),
@@ -386,10 +410,11 @@ summary(model_adiv_chao1)
 summary(model_adiv_shannon)
 summary(model_adiv_faith)
 
-# _ plots ----
+#### plots ####
+
+#### _ host class ####
 comparisons_class = list(c("c__Aves", "c__Mammalia"))
 
-# __ host class ----
 # obs OTUs
 class_obs = df_metadata_sub |>
   ggplot(aes(x = host_class, y = adiv_observed_otus, fill = host_class)) +
@@ -444,7 +469,7 @@ class_faith = df_metadata_sub |>
 combined_class_plot = (class_obs | class_chao) / (class_shannon | class_faith)
 combined_class_plot
 
-# __ sociality ---- 
+#### _ sociality ####
 sociality_order = c("solitary", "intermediate", "social")
 df_metadata_sub$basic_sociality = factor(df_metadata_sub$basic_sociality, levels = sociality_order)
 
@@ -496,8 +521,10 @@ soc_faith = df_metadata_sub |>
 combined_soc_plot = (soc_obs | soc_chao) / (soc_shannon | soc_faith)
 combined_soc_plot
 
-## dissimilarity ----
-# _ mammals ----
+################ DISSIMILARITY ################
+
+#### mammals ####
+
 aitchison_mammals = vegdist(df_otus_sub_mammals[,-1], method = "robust.aitchison", pseudocount = 1) #aitchison performs a clr, which only works on positive values: need to assign 1 to counts of 0
 
 # make a table with 3 columns: column id, row id, dissimilarity value
@@ -518,7 +545,8 @@ dissimilarity_table_mammals_sp2 = dissimilarity_table_mammals |>
 dissimilarity_table_mammals = dissimilarity_table_mammals |> 
   full_join(dissimilarity_table_mammals_sp2)
 
-# _ birds ----
+#### birds ####
+
 aitchison_birds = vegdist(df_otus_sub_birds[,-1], method = "robust.aitchison", pseudocount = 1)
 
 # make a table with 3 columns: column id, row id, dissimilarity value
@@ -539,7 +567,8 @@ dissimilarity_table_birds_sp2 = dissimilarity_table_birds |>
 dissimilarity_table_birds = dissimilarity_table_birds |> 
   full_join(dissimilarity_table_birds_sp2)
 
-# _ plots ----
+#### plots ####
+
 # mammals
 # calculate sample sizes per species
 sample_size_mammals = df_metadata_sub_mammals  |> 
@@ -604,7 +633,8 @@ dissimilarity_table_birds |>
   guides(fill = guide_legend(reverse = TRUE)) +
   coord_flip()
 
-# _ SERVER stats ----
+#### stats ####
+# run these on server only
 glm_diss_mammals = lmer(diss ~ basic_sociality + (1|host_species_1), data = dissimilarity_table_mammals)
 summary(glm_diss_mammals)
 jtools::summ(glm_diss_mammals) #Error: vector memory limit of 16.0 Gb reached, see mem.maxVSize()
@@ -614,8 +644,10 @@ glm_diss_birds = lmer(diss ~ basic_sociality + (1|host_species_1), data = dissim
 summary(glm_diss_birds)
 jtools::summ(glm_diss_birds) #social p = 0.60, solitary 0.46
 
-## db-RDA ----
-# _ all hosts ----
+################ DB-RDA ################
+
+#### all hosts ####
+
 # ensure that row order matches
 all(rownames(df_otus_sub) == rownames(df_metadata_sub)) #TRUE
 
@@ -637,14 +669,78 @@ aov_rda_social_all = anova(rda_social_all)
 print(aov_rda_diet_all) # p = 0.001
 RsquareAdj(rda_social_all) #ajd R^2 = 0.01653155
 
-# _ model selection
-## TO DO: add study_id as a random effect ####
+#### full model ####
+## model with sociality and diet as fixed effects, study_id and host phylogenetic distance as 'random effects' (in capscale, these are 'Conditions')
 
+# 1) get phylogenetic distances
+host_phylo_dist <- cophenetic(host_phylo)
+
+# 2) PCoA to generate phylogenetic axes
+# 2a) first, find best k based on scree plot
+# create scree plot
+host_pcoa <- cmdscale(host_phylo_dist, k = 20, eig = TRUE)  # extract 20 axes initially
+
+# calculate proportion of variance
+var_explained <- host_pcoa$eig / sum(host_pcoa$eig)
+cumvar <- cumsum(var_explained)
+
+# plot
+par(mfrow = c(1, 2))
+
+# scree plot
+plot(1:20, var_explained[1:20], 
+     type = "b", 
+     xlab = "Axis", 
+     ylab = "Proportion of Variance",
+     main = "Scree Plot",
+     pch = 19)
+# looks like 5 axes is where it drops off
+
+# cumulative variance
+plot(1:20, cumvar[1:20], 
+     type = "b",
+     xlab = "Axis", 
+     ylab = "Cumulative Variance",
+     main = "Cumulative Variance Explained",
+     pch = 19)
+abline(h = 0.80, col = "red", lty = 2)  # 80% threshold; 5 axes explains ~90% variance
+
+par(mfrow = c(1, 1))
+
+# 2b) generate phylogenetic axes
+host_phylo_dist <- cophenetic(host_tree)
+host_pcoa <- cmdscale(host_phylo_dist, k = 5, eig = TRUE)
+
+# 3) match to samples
+phylo_coords <- as.data.frame(host_pcoa$points)
+colnames(phylo_coords) <- paste0("PhyPC", 1:5)
+species_vector <- as.character(df_metadata_sub$host_scientific_name)
+sample_phylo <- phylo_coords[species_vector, ]
+rownames(sample_phylo) <- rownames(df_metadata_sub)
+
+# 4) add to metadata
+df_metadata_sub <- cbind(df_metadata_sub, sample_phylo)
+
+# 5) model with study_id and 5 phylogenetic axes as conditioning terms
+mod1_conditioned <- capscale(
+  formula = df_otus_sub ~ basic_diet + basic_sociality + 
+    Condition(study_id + PhyPC1 + PhyPC2 + PhyPC3 + PhyPC4 + PhyPC5),
+  data = df_metadata_sub,
+  distance = "robust.aitchison",
+  na.action = na.exclude
+)
+
+# 6) test model
+anova(mod1_conditioned, by = "margin", permutations = 999)
+
+# 6. Variance partitioning
+summary(mod1_conditioned)
+
+############ PREVIOUS CODE #############
 # run null and full models
 mod0_all = capscale(df_otus_sub ~ 1, data = df_metadata_sub, distance = "robust.aitchison", na.action = na.exclude)
 mod1_all = capscale(formula = df_otus_sub ~ host_species + basic_diet + basic_sociality + (1|study_id), data = df_metadata_sub,  distance = "robust.aitchison", na.action = na.exclude) #Some constraints or conditions were aliased because they were redundant. This can happen if terms are linearly dependent (collinear): ‘basic_dietherbivorous’, 'basic_dietomnivorous’, ‘basic_socialitysolitary’
 
-## TO DO ####
 # ordistep
 step_all = ordistep(mod0_all, scope = formula(mod1_all), direction = "both", perm.max = 200, na.action = na.exclude) #mod1_all has collinear variables
 
@@ -652,6 +748,9 @@ step_all = ordistep(mod0_all, scope = formula(mod1_all), direction = "both", per
 step_r2_all = ordiR2step(mod0_all, scope = formula(mod1_all), direction = "both", perm.max = 200, na.action = na.exclude) #mod1_all has collinear variables
 print(step_r2_all)
 # + host_species AIC = 2894.7, F = 1.783, p = 0.002
+
+############ PREVIOUS CODE #############
+
 
 # _ mammals ----
 # by species 
@@ -966,9 +1065,11 @@ rda_scores_social_birds_df |>
   ggtitle("C (birds)")
 
 
-## diff ab ----
-# _ setup ----
-# all
+################ DIFFERENTIAL ABUNDANCE ################
+
+##### setup #####
+
+# all hosts
 df_metadata_sub_da = df_metadata_sub |> 
   filter(basic_sociality != "intermediate") |> # exclude intermediate sociality
   column_to_rownames("sample_id") # bring rownames back
@@ -1010,8 +1111,8 @@ df_otus_sub_birds_da = df_otus_sub |>
   column_to_rownames("rowname") |>
   select(where(~ sum(.) != 0))
 
-# _ SERVER ----
-# _ all hosts
+# run this on the server only
+# all hosts
 v_social_da = df_metadata_sub_da |> pull(basic_sociality)
 social_clr = aldex.clr(t(df_otus_sub_da), v_social_da, mc.samples = 200) #basic_sociality is a character vector, so aldex sorts it alphabetically -> social is the reference group
 social_ttest = aldex.ttest(social_clr) #do not run on laptop
@@ -1019,7 +1120,7 @@ aldex_social_effect = aldex.effect(social_clr, CI = TRUE)
 social_aldex_all = data.frame(social_ttest, aldex_social_effect)
 social_aldex_all = social_aldex_all |> rownames_to_column()
 
-# _ mammals
+# mammals
 v_social_da_mammals = df_metadata_sub_mammals_da |> pull(basic_sociality)
 social_clr_mammals = aldex.clr(t(df_otus_sub_mammals_da), v_social_da_mammals, mc.samples = 200)
 social_ttest_mammals = aldex.ttest(social_clr_mammals)
@@ -1027,7 +1128,7 @@ aldex_social_effect_mammals = aldex.effect(social_clr_mammals, CI = TRUE)
 social_aldex_mammals = data.frame(social_ttest_mammals, aldex_social_effect_mammals)
 social_aldex_mammals = social_aldex_mammals |> rownames_to_column()
 
-# _ birds
+# birds
 v_social_da_birds = df_metadata_sub_birds_da |> pull(basic_sociality)
 social_clr_birds = aldex.clr(t(df_otus_sub_birds_da), v_social_da_birds, mc.samples = 200)
 social_ttest_birds = aldex.ttest(social_clr_birds)
@@ -1041,12 +1142,12 @@ write_csv(social_aldex_birds, "social_aldex_birds.csv")
 
 save(social_aldex_all, social_aldex_mammals, social_aldex_birds, file = "diff_ab_data.RData")
 
-# _ data input ----
+#### data input #####
 social_aldex_all = read_csv("social_aldex_all.csv")
 social_aldex_mammals = read_csv("social_aldex_mammals.csv")
 social_aldex_birds = read_csv("social_aldex_birds.csv")
 
-# _ plots ----
+#### plots #####
 par(mfrow = c(1,2))
 aldex.plot(social_aldex_all, type = "MA", test = "welch", main = "MA plot")
 aldex.plot(social_aldex_all, type = "MW", test = "welch", main = "effect plot")
