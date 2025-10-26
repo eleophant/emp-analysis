@@ -626,7 +626,7 @@ RsquareAdj(rda_social_all) #ajd R^2 = 0.01653155
 
 # run null and full models
 mod0_all = capscale(df_otus_sub ~ 1, data = df_metadata_sub, distance = "robust.aitchison", na.action = na.exclude)
-mod1_all = capscale(formula = df_otus_sub ~ host_species + basic_diet + basic_sociality + study_id, data = df_metadata_sub,  distance = "robust.aitchison", na.action = na.exclude) #Some constraints or conditions were aliased because they were redundant. This can happen if terms are linearly dependent (collinear): ‘basic_dietherbivorous’, 'basic_dietomnivorous’, ‘basic_socialitysolitary’
+mod1_all = capscale(formula = df_otus_sub ~ host_species + basic_diet + basic_sociality + (1|study_id), data = df_metadata_sub,  distance = "robust.aitchison", na.action = na.exclude) #Some constraints or conditions were aliased because they were redundant. This can happen if terms are linearly dependent (collinear): ‘basic_dietherbivorous’, 'basic_dietomnivorous’, ‘basic_socialitysolitary’
 
 ## TO DO ####
 # ordistep
