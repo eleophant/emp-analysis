@@ -30,9 +30,9 @@ conflicts_prefer(dplyr::slice)
 
 ################ DATA INPUT ################
 
-load(file = "emp_analysis_data_2025_02_03.RData") #this dataset has been modified to omit 1 reptile species, black bear, colobine primates
+load(file = "emp_analysis_with_phylo.RData") # this dataset has been modified to omit 1 reptile species, black bear, colobine primates
 
-################ SUBSAMPLING ################
+################ SUBSET ################
 
 #### make dfs ####
 df_obs_n = df_metadata |> 
@@ -58,12 +58,12 @@ df_otus_sub = mx_otus |> as.data.frame() |>
   rownames_to_column() |> 
   filter(rowname %in% common_samples_sub) |> 
   column_to_rownames("rowname") |>
-  select(where(~ sum(.) != 0)) #remove empty columns (OTUs that are 0 everywhere)
+  select(where(~ sum(.) != 0)) # remove empty columns (OTUs that are 0 everywhere)
 
 # ensure that row order matches
 df_metadata_sub = df_metadata_sub |>
   slice(match(rownames(df_otus_sub), rownames(df_metadata_sub)))
-all(rownames(df_otus_sub) == rownames(df_metadata_sub)) #TRUE
+all(rownames(df_otus_sub) == rownames(df_metadata_sub)) # TRUE
 
 #### phyloseq ####
 # set up metadata & otu table
@@ -71,7 +71,7 @@ p_metadata_sub = sample_data(df_metadata_sub)
 p_otu_sub = otu_table(df_otus_sub, taxa_are_rows = FALSE)
 
 # check that sample names match
-all(sample_names(p_metadata_sub) == sample_names(p_otu_sub)) #TRUE
+all(sample_names(p_metadata_sub) == sample_names(p_otu_sub)) # TRUE
 
 # assemble phyloseq object
 physeq_sub = phyloseq(p_otu_sub, p_metadata_sub, p_tax)
@@ -324,50 +324,6 @@ fantaxtic::top_taxa(ps_birds_sub, n = 3, tax_level = "phylum")
 
 fantaxtic::top_taxa(ps_birds_sub, n = 5, tax_level = "class")
 #Bacilli 0.211, Clostridia 0.175, Gammaproteobacteria 0.173, Alphaproteobacteria 0.0730, Betaproteobacteria 0.0645
-
-################ HOST PHYLOGENY ################
-
-
-# fix metadata to match OTL
-df_metadata_tree <- df_metadata_sub %>%
-  # remove "Genus sp."
-  filter(host_scientific_name != "Anser sp." & 
-           host_scientific_name != "Macropus sp.") %>% 
-  # fix synonyms 
-  mutate(
-    host_scientific_name = case_when(
-      host_scientific_name == "Proteles cristatus" ~ "Proteles cristata",
-      host_scientific_name == "Thraupis palmarum" ~ "Tangara palmarum",
-      TRUE ~ host_scientific_name
-    )
-  )
-
-# get OTT IDs for all EMP hosts
-ott_ids <- df_metadata_tree %>%
-  pull(host_scientific_name) %>% # extract host names
-  unique() %>% # remove duplicates
-  tnrs_match_names() %>% # match to OpenTree
-  pull(ott_id) # extract OTT IDs
-
-# build tree from species in df_metadata_tree
-host_phylo <- tol_induced_subtree(ott_ids = ott_ids) %>%
-  compute.brlen()
-
-# plot & check tip labels
-ape::plot.phylo(host_phylo, cex = 0.6)
-head(host_phylo$tip.label)
-
-# remove OTT suffix from tip labels
-host_phylo$tip.label = host_phylo$tip.label %>%
-  gsub("_ott[0-9]+$", "", .) %>% # remove "_ottXXXX" suffix
-  gsub("_", " ", .) %>% # replace underscores with spaces
-  trimws() # remove any stray whitespaces 
-
-# re-check tip labels
-head(host_phylo$tip.label) # now just "Genus species"
-ape::plot.phylo(host_phylo, cex = 0.6)
-
-all(df_metadata_tree$host_scientific_name %in% host_phylo$tip.label) #TRUE
 
 ################ ALPHA DIVERSITY ################
 
@@ -646,10 +602,10 @@ jtools::summ(glm_diss_birds) #social p = 0.60, solitary 0.46
 
 ################ DB-RDA ################
 
-#### all hosts ####
+#### individual models ####
 
 # ensure that row order matches
-all(rownames(df_otus_sub) == rownames(df_metadata_sub)) #TRUE
+all(rownames(df_otus_sub) == rownames(df_metadata_sub)) # TRUE
 
 # by species
 rda_sp_all = capscale(formula = df_otus_sub ~ host_species, data = df_metadata_sub,  distance = "robust.aitchison", na.action = na.exclude)
@@ -707,24 +663,32 @@ abline(h = 0.80, col = "red", lty = 2)  # 80% threshold; 5 axes explains ~90% va
 
 par(mfrow = c(1, 1))
 
-# 2b) generate phylogenetic axes
-host_phylo_dist <- cophenetic(host_tree)
+# 2b. generate phylogenetic axes
 host_pcoa <- cmdscale(host_phylo_dist, k = 5, eig = TRUE)
 
-# 3) match to samples
-phylo_coords <- as.data.frame(host_pcoa$points)
-colnames(phylo_coords) <- paste0("PhyPC", 1:5)
-species_vector <- as.character(df_metadata_sub$host_scientific_name)
-sample_phylo <- phylo_coords[species_vector, ]
-rownames(sample_phylo) <- rownames(df_metadata_sub)
+# 3. match to samples
+phylo_coords2 = as.data.frame(host_pcoa$points)
+phylo_coords2 = phylo_coords2 %>% 
+  rename(PhyPC1 = V1,
+         PhyPC2 = V2,
+         PhyPC3 = V3,
+         PhyPC4 = V4,
+         PhyPC5 = V5) %>% 
+  rownames_to_column() %>% 
+  rename(host_species = rowname)
 
-# 4) add to metadata
-df_metadata_sub <- cbind(df_metadata_sub, sample_phylo)
+# 4. add to metadata
+df_metadata_sub = df_metadata_sub %>%
+  inner_join(phylo_coords2, by = "host_species")
 
-# 5) model with study_id and 5 phylogenetic axes as conditioning terms
+# check
+df_metadata_sub %>% 
+  select(starts_with("PhyPC")) %>% 
+  head()
+
+# 5) model with study_id + diet + 5 phylogenetic axes as conditioning terms
 mod1_conditioned <- capscale(
-  formula = df_otus_sub ~ basic_diet + basic_sociality + 
-    Condition(study_id + PhyPC1 + PhyPC2 + PhyPC3 + PhyPC4 + PhyPC5),
+  df_otus_sub ~ basic_sociality + Condition(study_id + basic_diet + PhyPC1 + PhyPC2 + PhyPC3 + PhyPC4 + PhyPC5),
   data = df_metadata_sub,
   distance = "robust.aitchison",
   na.action = na.exclude
@@ -733,7 +697,7 @@ mod1_conditioned <- capscale(
 # 6) test model
 anova(mod1_conditioned, by = "margin", permutations = 999)
 
-# 6. Variance partitioning
+# variance partitioning
 summary(mod1_conditioned)
 
 ############ PREVIOUS CODE #############
