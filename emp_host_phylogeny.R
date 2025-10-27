@@ -1,6 +1,19 @@
+########################################
+#
+# EMP analysis on subsampled data - host phylogeny construction
+#
+# Eleonore Lebeuf-Taylor
+#
+########################################
+
+
+################ PACKAGES ################
+
 library(ape)
 library(rotl)
 library(tidyverse)
+
+################ SETUP ################
 
 # 1) prepare species names (convert "sp." to genus level)
 species_df <- tibble(
@@ -15,6 +28,8 @@ species_df <- tibble(
 cat("Taxa to include in tree:\n")
 print(species_df)
 
+################ QUERY OTL ################
+
 # 2) query Open Tree of Life
 resolved_raw <- tnrs_match_names(species_df$clean_no_sp, context_name = "Animals")
 
@@ -26,6 +41,8 @@ resolved <- as_tibble(resolved_raw) %>%
       mutate(clean_no_sp_lower = str_to_lower(clean_no_sp)),
     by = c("search_string_lower" = "clean_no_sp_lower")
   )
+
+################ CHECKS ################
 
 # 3) check what was matched and at what rank
 cat("\nMatching summary:\n")
@@ -40,20 +57,25 @@ resolved %>%
   select(original, search_string, unique_name, ott_id, approximate_match) %>%
   print()
 
-# Verify no more NAs in original column
+# check no more NAs in original column
 cat("\nRows with NA in original column:\n")
 resolved %>%
   filter(is.na(original)) %>%
   select(search_string, unique_name, ott_id) %>%
-  print()
+  print() # empty!
+
+################ BUILD TREE ################
 
 # 4) build tree
 valid_ids <- resolved %>%
   filter(!is.na(ott_id)) %>%
   pull(ott_id)
 
-cat(paste("Building tree with", length(valid_ids), "OTT IDs...\n"))
+cat(paste("Building tree with", length(valid_ids), "OTT IDs:\n"))
 host_tree_complete <- tol_induced_subtree(ott_ids = valid_ids)
+
+
+################ RENAME TIPS ################
 
 # 5) rename tips
 tip_to_original <- tibble(
@@ -83,6 +105,8 @@ cat("Macropus_sp. in tree:", "s__Macropus_sp." %in% host_tree_complete$tip.label
 
 # Anser is there, but Macropus is missing: add manually
 
+################ ADD MACROPUS ################
+
 cat("\nAdding Macropus_sp. manually:\n")
 
 # list of potential relatives
@@ -99,7 +123,38 @@ macropus_relatives <- c(
   "Felis",          # cats
   "Vulpes",         # foxes
   "Mus",            # mice
+  "Rattus"          # rats
 )
+
+# find a relative in the tree
+relative_found <- NULL
+for (genus in macropus_relatives) {
+  matches <- grep(genus, host_tree_complete$tip.label, 
+                  ignore.case = TRUE, value = TRUE)
+  if (length(matches) > 0) {
+    relative_found <- matches[1]
+    cat(sprintf("  Found relative: %s\n", relative_found))
+    break
+  }
+}
+
+if (!is.null(relative_found)) {
+  # Add Macropus as sister to the relative
+  tip_position <- which(host_tree_complete$tip.label == relative_found)
+  
+  host_tree_complete <- bind.tip(
+    host_tree_complete,
+    tip.label = "s__Macropus_sp.",
+    where = tip_position,
+    edge.length = 0.1,
+    position = 0
+  )
+  
+  cat(sprintf("  Added Macropus_sp. as sister to %s\n", relative_found))
+  
+}
+
+################ FINAL CHECK ################
 
 # check tree coverage
 all_species <- unique(df_metadata_sub$host_species)
@@ -109,6 +164,8 @@ cat(sprintf("Coverage: %d/%d species (%.1f%%)\n",
             100 * final_coverage / length(all_species)))
 
 # we have 100% coverage !
+
+################ ADD BRANCHES ################
 
 # 6) add branch lengths
 host_phylo = host_tree_complete
