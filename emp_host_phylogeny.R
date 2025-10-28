@@ -77,7 +77,6 @@ valid_ids <- resolved %>%
 cat(paste("Building tree with", length(valid_ids), "OTT IDs:\n"))
 host_tree_complete <- tol_induced_subtree(ott_ids = valid_ids)
 
-
 ################ RENAME TIPS ################
 
 # 5) rename tips
@@ -142,7 +141,7 @@ for (genus in macropus_relatives) {
 }
 
 if (!is.null(relative_found)) {
-  # Add Macropus as sister to the relative
+  # add Macropus as sister to the relative
   tip_position <- which(host_tree_complete$tip.label == relative_found)
   
   host_tree_complete <- bind.tip(
