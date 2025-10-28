@@ -6,12 +6,15 @@
 #
 ########################################
 
-
 ################ PACKAGES ################
 
 library(ape)
 library(rotl)
 library(tidyverse)
+
+################ DATA INPUT ################
+
+load(file = "emp_data_for_host_phylogeny.RData")
 
 ################ SETUP ################
 
