@@ -177,13 +177,13 @@ otus_per_sample_birds = df_otus_sub_birds |> mutate(total_otus = rowSums(df_otus
   select(rowname, total_otus)
 
 otus_per_sample_birds = df_metadata_sub_birds |> 
-  #rename(rowname = sample_id) |> 
+  # rename(rowname = sample_id) |> 
   rownames_to_column() |> 
   full_join(otus_per_sample_birds) |> 
   select(rowname, host_class, host_scientific_name, total_otus)
 
 otus_per_sample_birds |> summarise(mean(total_otus), median(total_otus), max(total_otus), min(total_otus))
-#mean 807, median 695, max 2817, min 114
+# mean 807, median 695, max 2817, min 114
 
 #### compare classes ####
 wilcox.test(total_otus ~ host_class, data = otus_per_sample) # W = 6841, p-value = 0.0001415
@@ -477,29 +477,9 @@ soc_faith = df_metadata_sub |>
 combined_soc_plot = (soc_obs | soc_chao) / (soc_shannon | soc_faith)
 combined_soc_plot
 
-################ DISSIMILARITY ################
+################ BETA DIVERSITY ################
 
-#### betadisp ####
-# calculate distances
-dist_mat <- vegdist(df_otus_sub, method = "robust.aitchison")
-
-# test dispersion differences among sociality groups
-disp_test_social <- betadisper(dist_mat, df_metadata_sub$basic_sociality)
-anova(disp_test_social) # p < 0.001
-
-plot(disp_test_social)
-boxplot(disp_test_social, main = "Distance to centroid by social behaviour")
-
-# test dispersion differences among dietary groups
-disp_test_diet <- betadisper(dist_mat, df_metadata_sub$basic_diet)
-anova(disp_test_diet) # p < 0.001
-
-plot(disp_test_diet)
-boxplot(disp_test_diet, main = "Distance to centroid by diet")
-
-################ DB-RDA ################
-
-#### full model ####
+#### db-RDA ####
 
 ## model with sociality and diet as fixed effects, study_id and host phylogenetic distance as 'random effects' (in capscale, these are 'Conditions')
 
@@ -578,6 +558,7 @@ RsquareAdj(mod1_conditioned)
 
 #### anosim ####
 
+# less informative, because cannot condition on 'random effects'
 dist_mat <- vegdist(df_otus_sub, method = "robust.aitchison")
 
 # anosim sociality
@@ -599,6 +580,48 @@ anosim_diet <- anosim(
 
 cat("\n=== ANOSIM (alternative test) ===\n")
 print(anosim_diet)
+
+#### betadisp ####
+
+# measures dispersion within each group and compared to dispersion between group
+# calculate distances
+dist_mat <- vegdist(df_otus_sub, method = "robust.aitchison")
+
+# test dispersion differences among sociality groups
+disp_test_social <- betadisper(dist_mat, df_metadata_sub$basic_sociality)
+anova(disp_test_social) # p < 0.001
+
+plot(disp_test_social)
+boxplot(disp_test_social, main = "Distance to centroid by social behaviour")
+
+cat("\nPairwise dispersion differences:\n")
+print(TukeyHSD(disp_test_social))
+
+# test dietary groups
+disp_test_diet <- betadisper(dist_mat, df_metadata_sub$basic_diet)
+anova(disp_test_diet) # p < 0.001
+
+plot(disp_test_diet)
+boxplot(disp_test_diet, main = "Distance to centroid by diet")
+# calculate distances
+dist_mat <- vegdist(df_otus_sub, method = "robust.aitchison")
+
+# test dispersion differences among sociality groups
+disp_test_social <- betadisper(dist_mat, df_metadata_sub$basic_sociality)
+anova(disp_test_social) # p < 0.001
+
+plot(disp_test_social)
+boxplot(disp_test_social, main = "Distance to centroid by social behaviour")
+
+cat("\nPairwise dispersion differences:\n")
+print(TukeyHSD(disp_test_social))
+
+# test dietary groups
+disp_test_diet <- betadisper(dist_mat, df_metadata_sub$basic_diet)
+anova(disp_test_diet) # p < 0.001
+
+plot(disp_test_diet)
+boxplot(disp_test_diet, main = "Distance to centroid by diet")
 
 #### mammals ####
 
@@ -847,7 +870,7 @@ rda_scores_diet_birds_df = rda_diet_birds |>
   scores(display = "sites") |> # extract the site scores
   as.data.frame() |> 
   rownames_to_column() |> 
-  mutate(sample_id = rowname) |> #add a sample_id column
+  mutate(sample_id = rowname) |> # add a sample_id column
   left_join(df_metadata_sub, by = "sample_id")
 
 gg_ordiplot(rda_diet_birds, groups = df_metadata_sub_birds$basic_diet, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 3.82% (no other axes)
@@ -899,6 +922,73 @@ rda_scores_social_birds_df |>
   ) +
   ggtitle("C (birds)")
 
+################ BETADISP ################
+
+# calculate distances
+dist_mat <- vegdist(df_otus_sub, method = "robust.aitchison")
+
+# generate dispersion per species
+disp_test_species <- betadisper(dist_mat, df_metadata_sub$host_species)
+anova(disp_test_species) # p < 0.001
+
+boxplot(disp_test_species, main = "Distance to centroid by social behaviour")
+
+# create df with betadisp metrics for each species + sociality level
+disp_data <- data.frame(
+  distance = disp_test_species$distances,
+  species = df_metadata_sub$host_species,
+  sociality = df_metadata_sub$basic_sociality
+)
+
+# filter to species with at least 5 samples
+disp_data_n = disp_data %>% 
+  group_by(species) %>% 
+  summarise(n = n()) %>% 
+  rename(host_species = species)
+
+disp_data = disp_data %>% 
+  left_join(disp_data_n) %>% 
+  filter(n > 4) %>% 
+  rename(host_species = species)
+
+# add PhyPC1:5 
+
+df_metadata_n = disp_data %>% 
+  group_by(species) %>% 
+  summarise(n = n()) %>% 
+  rename(host_species = species)
+
+
+disp_data2 = df_metadata_sub %>%
+  left_join(disp_data_n) %>% 
+  filter(n > 4) %>% 
+  select(host_species, starts_with("Phy")) #%>% 
+  right_join(disp_data, by = "host_species")
+
+# plot dispersion per species
+disp_data %>% 
+  ggplot(aes(x = species, y = distance, fill = sociality)) +
+  geom_boxplot() +
+  coord_flip() +  # flip to make horizontal
+  labs(
+    title = "Microbiome Dispersion by Species",
+    x = "Host Species",
+    y = "Distance to Centroid",
+    fill = "Sociality"
+  ) +
+  theme_minimal()
+
+# TODO ####
+# 1. change order and colours to look like previous plot
+
+# 2. run PGLMM? (test assumptions) on dispersion ~ species, something like this:
+
+model_disp_soc <- pglmm(
+  distance ~ basic_sociality + (1|host_scientific_name), # need the random effect?
+  data = disp_data,
+  family = "gaussian",
+  cov_ranef = list(host_scientific_name = host_phylo)
+)
 
 ################ DIFFERENTIAL ABUNDANCE ################
 
