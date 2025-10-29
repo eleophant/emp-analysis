@@ -79,33 +79,40 @@ ps_sub = merge_phyloseq(physeq_sub, tree_emp)
 
 #### subset classes ####
 # mammals
-df_metadata_sub_mammals = df_metadata_sub %>%
+df_metadata_sub_mammals <- df_metadata_sub |>
   filter(host_class == "c__Mammalia")
-common_samples_sub_mammals = intersect(rownames(mx_otus), rownames(df_metadata_sub_mammals))
 
-df_otus_sub_mammals = mx_otus %>% as.data.frame() %>% 
-  rownames_to_column() %>% 
-  filter(rowname %in% common_samples_sub_mammals) %>% 
-  column_to_rownames("rowname") %>%
+# keep only samples in OTU matrix
+common_samples_sub_mammals <- intersect(rownames(mx_otus), rownames(df_metadata_sub_mammals))
+
+# order-preserving approach
+df_metadata_sub_mammals <- df_metadata_sub_mammals[common_samples_sub_mammals, , drop = FALSE]
+
+df_otus_sub_mammals <- mx_otus |>
+  as.data.frame() |>
+  rownames_to_column(var = "rowname") |>
+  filter(rowname %in% common_samples_sub_mammals) |>
+  column_to_rownames("rowname") |>
   select(where(~ sum(.) != 0))
 
-# ensure that row order matches
+# force both to the same order
+df_otus_sub_mammals <- df_otus_sub_mammals[rownames(df_metadata_sub_mammals), ]
+
+# check alignment
 all(rownames(df_otus_sub_mammals) == rownames(df_metadata_sub_mammals)) # TRUE
 
 # birds
-df_metadata_sub_birds = df_metadata_sub %>%
+df_metadata_sub_birds = df_metadata_sub |>
   filter(host_class == "c__Aves")
+
 common_samples_sub_birds = intersect(rownames(mx_otus), rownames(df_metadata_sub_birds))
 
-df_otus_sub_birds = mx_otus %>% as.data.frame() %>% 
-  rownames_to_column() %>% 
-  filter(rowname %in% common_samples_sub_birds) %>% 
-  column_to_rownames("rowname") %>%
+df_otus_sub_birds = mx_otus |> as.data.frame() |> 
+  rownames_to_column() |> 
+  filter(rowname %in% common_samples_sub_birds) |> 
+  column_to_rownames("rowname") |>
   select(where(~ sum(.) != 0))
 
-# ensure that row order matches
-df_metadata_sub_birds = df_metadata_sub_birds %>% 
-  slice(match(rownames(df_otus_sub_birds), rownames(df_metadata_sub_birds)))
 all(rownames(df_otus_sub_birds) == rownames(df_metadata_sub_birds)) # TRUE
 
 # phyloseq
@@ -113,6 +120,14 @@ ps_mammals_sub = subset_samples(ps_sub, host_class == "c__Mammalia")
 ps_birds_sub = subset_samples(ps_sub, host_class == "c__Aves")
 
 ################ DATA EXPLORATION ################
+
+### collinearity ####
+
+table_sd <- table(df_metadata_sub$basic_sociality, df_metadata_sub$basic_diet)
+
+chisq.test(table_sd)
+# X-squared = 101.75, df = 4, p-value < 2.2e-16
+# soiality and diet are highly collinear
 
 #### all hosts ####
 df_metadata_sub %>% nrow() # 375 samples
@@ -332,28 +347,28 @@ fantaxtic::top_taxa(ps_birds_sub, n = 5, tax_level = "class")
 
 # models for each metric
 model_adiv_observed <- pglmm(
-  adiv_observed_otus ~ basic_sociality + (1|host_scientific_name),
+  adiv_observed_otus ~ basic_sociality + (1|host_scientific_name) + (1|diet),
   data = df_metadata_sub,
   family = "gaussian",
   cov_ranef = list(host_scientific_name = host_phylo)
 )
 
 model_adiv_chao1 <- pglmm(
-  adiv_chao1 ~ basic_sociality + (1|host_scientific_name),
+  adiv_chao1 ~ basic_sociality + (1|host_scientific_name)+ (1|diet),
   data = df_metadata_sub,
   family = "gaussian",
   cov_ranef = list(host_scientific_name = host_phylo)
 )
 
 model_adiv_shannon <- pglmm(
-  adiv_shannon ~ basic_sociality + (1|host_scientific_name),
+  adiv_shannon ~ basic_sociality + (1|host_scientific_name)+ (1|diet),
   data = df_metadata_sub,
   family = "gaussian",
   cov_ranef = list(host_scientific_name = host_phylo)
 )
 
 model_adiv_faith <- pglmm(
-  adiv_faith_pd ~ basic_sociality + (1|host_scientific_name),
+  adiv_faith_pd ~ basic_sociality + (1|host_scientific_name)+ (1|diet),
   data = df_metadata_sub,
   family = "gaussian",
   cov_ranef = list(host_scientific_name = host_phylo)
@@ -364,6 +379,29 @@ summary(model_adiv_observed)
 summary(model_adiv_chao1)
 summary(model_adiv_shannon)
 summary(model_adiv_faith)
+
+# check model assumptions
+
+# homoscedasticity
+fitted_vals <- fitted(model_adiv_observed)
+
+# Residuals vs Fitted (check homoscedasticity)
+plot(fitted_vals, residuals,
+     xlab = "Fitted Values", ylab = "Residuals",
+     main = "Residuals vs Fitted")
+abline(h = 0, col = "red", lwd = 2)
+lines(lowess(fitted_vals, residuals), col = "blue", lwd = 2)
+# looks okay
+
+# run log-transformed model
+
+# 2. Run log-transformed version
+model_log <- pglmm(
+  log(adiv_observed_otus) ~ basic_sociality + (1|host_scientific_name) + (1|diet),
+  data = df_metadata_sub,
+  family = "gaussian",
+  cov_ranef = list(host_scientific_name = host_phylo)
+) # results are qualitatively equivalent
 
 #### plots ####
 
@@ -478,6 +516,31 @@ combined_soc_plot
 
 ################ BETA DIVERSITY ################
 
+#### anosim ####
+
+# less informative than db-RDA or PERMANOVA (adonis), because cannot condition on 'random effects', but including it anyway as exploratory
+dist_mat <- vegdist(df_otus_sub, method = "robust.aitchison")
+
+# anosim sociality
+anosim_result <- anosim(
+  dist_mat, 
+  df_metadata_sub$basic_sociality, 
+  permutations = 999
+)
+
+cat("\n=== ANOSIM (alternative test) ===\n")
+print(anosim_result)
+
+# anosim diet
+anosim_diet <- anosim(
+  dist_mat, 
+  df_metadata_sub$basic_diet, 
+  permutations = 999
+)
+
+cat("\n=== ANOSIM (alternative test) ===\n")
+print(anosim_diet)
+
 #### db-RDA ####
 
 ## model with sociality and diet as fixed effects, study_id and host phylogenetic distance as 'random effects' (in capscale, these are 'Conditions')
@@ -521,8 +584,8 @@ par(mfrow = c(1, 1))
 host_pcoa <- cmdscale(host_phylo_dist, k = 5, eig = TRUE)
 
 # 3) match to samples
-phylo_coords2 = as.data.frame(host_pcoa$points)
-phylo_coords2 = phylo_coords2 %>% 
+phylo_coords = as.data.frame(host_pcoa$points)
+phylo_coords = phylo_coords %>% 
   rename(PhyPC1 = V1,
          PhyPC2 = V2,
          PhyPC3 = V3,
@@ -533,7 +596,7 @@ phylo_coords2 = phylo_coords2 %>%
 
 # 4) add to metadata
 df_metadata_sub = df_metadata_sub %>%
-  inner_join(phylo_coords2, by = "host_species")
+  inner_join(phylo_coords, by = "host_species")
 
 # check
 df_metadata_sub %>% 
@@ -555,30 +618,59 @@ anova(mod1_conditioned, by = "margin", permutations = 999)
 # variance explained
 RsquareAdj(mod1_conditioned)
 
-#### anosim ####
+#### _ mammals ####
 
-# less informative, because cannot condition on 'random effects'
-dist_mat <- vegdist(df_otus_sub, method = "robust.aitchison")
+# add phylogenetic PCoA to metadata
+df_metadata_sub_mammals = df_metadata_sub_mammals %>%
+  inner_join(phylo_coords, by = "host_species")
 
-# anosim sociality
-anosim_result <- anosim(
-  dist_mat, 
-  df_metadata_sub$basic_sociality, 
-  permutations = 999
+# model with study_id + diet + 5 phylogenetic axes as conditioned terms
+mod1_conditioned_mammals <- capscale(
+  df_otus_sub_mammals ~ basic_sociality + 
+    Condition(study_id + basic_diet + PhyPC1 + PhyPC2 + PhyPC3 + PhyPC4 + PhyPC5),
+  data = df_metadata_sub_mammals,
+  distance = "robust.aitchison",
+  na.action = na.exclude
 )
 
-cat("\n=== ANOSIM (alternative test) ===\n")
-print(anosim_result)
+# test model
+anova(mod1_conditioned_mammals, by = "margin", permutations = 999)
 
-# anosim diet
-anosim_diet <- anosim(
-  dist_mat, 
-  df_metadata_sub$basic_diet, 
-  permutations = 999
+# variance explained
+RsquareAdj(mod1_conditioned_mammals)
+
+#### _ birds ####
+
+# add phylogenetic PCoA to metadata
+df_metadata_sub_birds = df_metadata_sub_birds %>%
+  inner_join(phylo_coords2, by = "host_species")
+
+# model with study_id + diet + 5 phylogenetic axes as conditioned terms
+mod1_conditioned_birds <- capscale(
+  df_otus_sub_birds ~ basic_sociality + 
+    Condition(study_id + basic_diet + PhyPC1 + PhyPC2 + PhyPC3 + PhyPC4 + PhyPC5),
+  data = df_metadata_sub_birds,
+  distance = "robust.aitchison",
+  na.action = na.exclude
 )
 
-cat("\n=== ANOSIM (alternative test) ===\n")
-print(anosim_diet)
+# test model
+anova(mod1_conditioned_birds, by = "margin", permutations = 999)
+
+# variance explained
+RsquareAdj(mod1_conditioned_birds)
+
+
+#### adonis ####
+mod1_adonis <- adonis2(
+  dist_mat ~ basic_sociality + study_id + basic_diet + 
+    PhyPC1 + PhyPC2 + PhyPC3 + PhyPC4 + PhyPC5,
+  data = df_metadata_sub,
+  permutations = 999,
+  by = "margin"  # tests each term after all others
+)
+
+mod1_adonis
 
 #### betadisp ####
 
@@ -622,47 +714,6 @@ anova(disp_test_diet) # p < 0.001
 plot(disp_test_diet)
 boxplot(disp_test_diet, main = "Distance to centroid by diet")
 
-#### mammals ####
-
-# add phylogenetic PCoA to metadata
-df_metadata_sub_mammals = df_metadata_sub_mammals %>%
-  inner_join(phylo_coords2, by = "host_species")
-
-# model with study_id + diet + 5 phylogenetic axes as conditioned terms
-mod1_conditioned_mammals <- capscale(
-  df_otus_sub_mammals ~ basic_sociality + 
-    Condition(study_id + basic_diet + PhyPC1 + PhyPC2 + PhyPC3 + PhyPC4 + PhyPC5),
-  data = df_metadata_sub_mammals,
-  distance = "robust.aitchison",
-  na.action = na.exclude
-)
-
-# test model
-anova(mod1_conditioned_mammals, by = "margin", permutations = 999)
-
-# variance explained
-RsquareAdj(mod1_conditioned_mammals)
-
-#### birds ####
-
-# add phylogenetic PCoA to metadata
-df_metadata_sub_birds = df_metadata_sub_birds %>%
-  inner_join(phylo_coords2, by = "host_species")
-
-# model with study_id + diet + 5 phylogenetic axes as conditioned terms
-mod1_conditioned_birds <- capscale(
-  df_otus_sub_birds ~ basic_sociality + 
-    Condition(study_id + basic_diet + PhyPC1 + PhyPC2 + PhyPC3 + PhyPC4 + PhyPC5),
-  data = df_metadata_sub_birds,
-  distance = "robust.aitchison",
-  na.action = na.exclude
-)
-
-# test model
-anova(mod1_conditioned_birds, by = "margin", permutations = 999)
-
-# variance explained
-RsquareAdj(mod1_conditioned_birds)
 
 # _ plot all hosts ----
 df_metadata_sub = df_metadata_sub %>% rownames_to_column() %>% rename("sample_id" = "rowname")
@@ -974,7 +1025,7 @@ summary(lm_weighted)
 # check model assumptions
 plot(lm_weighted) # residuals vs fitted (homoscedasticity) and qq plot (normality of residuals) look good
 
-#### TODO plot #####
+#### plot #####
 
 # ordering
 disp_data = disp_data %>% 
