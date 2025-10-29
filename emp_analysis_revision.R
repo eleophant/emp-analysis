@@ -935,37 +935,37 @@ boxplot(disp_test_species, main = "Distance to centroid by social behaviour")
 # create df with betadisp metrics for each species + sociality level
 disp_data <- data.frame(
   distance = disp_test_species$distances,
-  species = df_metadata_sub$host_species,
+  host_scientific_name = df_metadata_sub$host_scientific_name,
+  host_species = df_metadata_sub$host_species,
   sociality = df_metadata_sub$basic_sociality
 )
 
 # filter to species with at least 5 samples
 disp_data_n = disp_data %>% 
-  group_by(species) %>% 
+  group_by(host_scientific_name) %>% 
   summarise(n = n())
 
 disp_data = disp_data %>% 
-  left_join(disp_data_n) %>% 
-  filter(n > 4) %>% 
-  rename(host_species = species)
+  left_join(disp_data_n, by = "host_scientific_name") %>% 
+  filter(n > 4)
 
 disp_data %>% 
-  distinct(host_species) # 15 species, 309 observations
+  distinct(host_species) # 15 species, 308 observations
 
 # add PhyPC1:5 from metadata with n > 4
 df_metadata_phy = df_metadata_sub %>% 
   select(host_species, host_scientific_name, host_genus, starts_with("Phy")) %>% 
-  distinct(host_species, .keep_all = TRUE) # keep Phy columns
+  distinct(host_scientific_name, .keep_all = TRUE) # keep all columns
 
 disp_data = disp_data %>%
-  left_join(df_metadata_phy)
+  left_join(df_metadata_phy, by = "host_scientific_name")
 
 # set reference level to 'social'
 disp_data$sociality <- factor(disp_data$sociality, levels = c("social", "intermediate", "solitary"))
 
 # test whether sociality predicts distance, weight by sqrt(n) bc more samples = more reliable estimate
 species_model_weighted <- lmer(
-  distance ~ sociality + (1|host_species),
+  distance ~ sociality + (1|host_scientific_name),
   data = disp_data,
   weights = sqrt(n)
 )
@@ -978,15 +978,15 @@ jtools::summ(species_model_weighted) # sociality not sig
 #### TODO plot #####
 
 # ordering
-disp_data = disp_data %>%
-  mutate(sociality = fct_relevel(sociality, c("social", "intermediate", "solitary"))) %>%
-  arrange(sociality, n) %>% # reorder by sociality then sample size
+disp_data = disp_data %>% 
+  mutate(sociality = fct_relevel(sociality, c("solitary", "intermediate", "social"))) %>%
+  arrange(sociality, n) %>%  # reorder by sociality then sample size
   mutate(host_scientific_name = factor(host_scientific_name, levels = unique(host_scientific_name)))
 
-# plot dispersion distances, ordered by sociality and sample size
+# plot dispersion distances
 disp_data %>% 
   # order
-  mutate(sociality = fct_relevel(sociality, "social", "intermediate", "solitary"), host_species = factor(host_species, levels = levels(n))) %>% 
+  #mutate(sociality = fct_relevel(sociality, "solitary", "intermediate", "social"), host_species = factor(host_species, levels = levels(n))) %>% 
   # plot
   ggplot(aes(x = host_scientific_name, y = distance, fill = sociality)) +
   geom_boxplot(width = 0.6) +
@@ -998,7 +998,6 @@ disp_data %>%
         axis.text.y = element_text(face = "italic")) +
   guides(fill = guide_legend(reverse = TRUE)) +
   coord_flip()
-
 
 ################ DIFFERENTIAL ABUNDANCE ################
 
