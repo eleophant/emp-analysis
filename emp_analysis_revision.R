@@ -35,33 +35,33 @@ load(file = "emp_analysis_data_2025_02_03.RData") # this dataset has been modifi
 ################ SUBSET ################
 
 #### make dfs ####
-df_obs_n = df_metadata |> 
-  group_by(host_species) |> 
-  summarise(n = n()) |> 
+df_obs_n = df_metadata %>% 
+  group_by(host_species) %>% 
+  summarise(n = n()) %>% 
   print(n = 27)
 
-df_obs_n |> summarise(mean(n), median(n), max(n), min(n))
+df_obs_n %>% summarise(mean(n), median(n), max(n), min(n))
 # mean 41, median 3, max 902, min 1
 
 # subsample metadata
-df_metadata_sub = df_metadata |> 
-  rownames_to_column() |> 
-  group_by(host_species) |> 
-  slice_sample(n = 41)  |>
-  ungroup() |> 
+df_metadata_sub = df_metadata %>% 
+  rownames_to_column() %>% 
+  group_by(host_species) %>% 
+  slice_sample(n = 41)  %>%
+  ungroup() %>% 
   column_to_rownames("rowname")
 
 # subsample otu table
 common_samples_sub = intersect(rownames(mx_otus), rownames(df_metadata_sub))
 
-df_otus_sub = mx_otus |> as.data.frame() |> 
-  rownames_to_column() |> 
-  filter(rowname %in% common_samples_sub) |> 
-  column_to_rownames("rowname") |>
+df_otus_sub = mx_otus %>% as.data.frame() %>% 
+  rownames_to_column() %>% 
+  filter(rowname %in% common_samples_sub) %>% 
+  column_to_rownames("rowname") %>%
   select(where(~ sum(.) != 0)) # remove empty columns (OTUs that are 0 everywhere)
 
 # ensure that row order matches
-df_metadata_sub = df_metadata_sub |>
+df_metadata_sub = df_metadata_sub %>%
   slice(match(rownames(df_otus_sub), rownames(df_metadata_sub)))
 all(rownames(df_otus_sub) == rownames(df_metadata_sub)) # TRUE
 
@@ -79,32 +79,32 @@ ps_sub = merge_phyloseq(physeq_sub, tree_emp)
 
 #### subset classes ####
 # mammals
-df_metadata_sub_mammals = df_metadata_sub |>
+df_metadata_sub_mammals = df_metadata_sub %>%
   filter(host_class == "c__Mammalia")
 common_samples_sub_mammals = intersect(rownames(mx_otus), rownames(df_metadata_sub_mammals))
 
-df_otus_sub_mammals = mx_otus |> as.data.frame() |> 
-  rownames_to_column() |> 
-  filter(rowname %in% common_samples_sub_mammals) |> 
-  column_to_rownames("rowname") |>
+df_otus_sub_mammals = mx_otus %>% as.data.frame() %>% 
+  rownames_to_column() %>% 
+  filter(rowname %in% common_samples_sub_mammals) %>% 
+  column_to_rownames("rowname") %>%
   select(where(~ sum(.) != 0))
 
 # ensure that row order matches
 all(rownames(df_otus_sub_mammals) == rownames(df_metadata_sub_mammals)) # TRUE
 
 # birds
-df_metadata_sub_birds = df_metadata_sub |>
+df_metadata_sub_birds = df_metadata_sub %>%
   filter(host_class == "c__Aves")
 common_samples_sub_birds = intersect(rownames(mx_otus), rownames(df_metadata_sub_birds))
 
-df_otus_sub_birds = mx_otus |> as.data.frame() |> 
-  rownames_to_column() |> 
-  filter(rowname %in% common_samples_sub_birds) |> 
-  column_to_rownames("rowname") |>
+df_otus_sub_birds = mx_otus %>% as.data.frame() %>% 
+  rownames_to_column() %>% 
+  filter(rowname %in% common_samples_sub_birds) %>% 
+  column_to_rownames("rowname") %>%
   select(where(~ sum(.) != 0))
 
 # ensure that row order matches
-df_metadata_sub_birds = df_metadata_sub_birds |> 
+df_metadata_sub_birds = df_metadata_sub_birds %>% 
   slice(match(rownames(df_otus_sub_birds), rownames(df_metadata_sub_birds)))
 all(rownames(df_otus_sub_birds) == rownames(df_metadata_sub_birds)) # TRUE
 
@@ -115,74 +115,73 @@ ps_birds_sub = subset_samples(ps_sub, host_class == "c__Aves")
 ################ DATA EXPLORATION ################
 
 #### all hosts ####
-df_metadata_sub |> nrow() # 375 samples
-df_metadata_sub |> group_by(host_species) |> 
-  summarise(n = n()) |> print(n = 100) # 45 host species
-df_otus_sub |> as.data.frame() |> ncol() # number of OTUs = 34,482
-df_otus_sub |> sum() # total reads = 13,085,267
+df_metadata_sub %>% nrow() # 375 samples
+df_metadata_sub %>% group_by(host_species) %>% 
+  summarise(n = n()) %>% print(n = 100) # 45 host species
+df_otus_sub %>% as.data.frame() %>% ncol() # number of OTUs = 34,482
+df_otus_sub %>% sum() # total reads = 13,085,267
 
 # per sample
 mean(rowSums(df_otus_sub)) # mean number of reads = 34,894.05
 sd(rowSums(df_otus_sub)) # 24,286.86
 
-otus_per_sample = df_otus_sub |> mutate(total_otus = rowSums(df_otus_sub != 0)) |> rownames_to_column() |> 
+otus_per_sample = df_otus_sub %>% mutate(total_otus = rowSums(df_otus_sub != 0)) %>% rownames_to_column() %>% 
   select(rowname, total_otus)
 
-otus_per_sample = df_metadata_sub |> 
-  rownames_to_column() |> 
-  # rename(rowname = sample_id) |> 
-  full_join(otus_per_sample) |> 
+otus_per_sample = df_metadata_sub %>% 
+  rownames_to_column() %>% 
+  # rename(rowname = sample_id) %>% 
+  full_join(otus_per_sample) %>% 
   select(rowname, host_class, host_scientific_name, total_otus)
 
-otus_per_sample |> summarise(mean(total_otus), median(total_otus), max(total_otus), min(total_otus))
+otus_per_sample %>% summarise(mean(total_otus), median(total_otus), max(total_otus), min(total_otus))
 # mean 1019, median 961, max 2817, min 114
 
 #### mammals ####
-# collectively
-df_metadata_sub_mammals |> nrow() # 312 samples
-df_metadata_sub_mammals |> group_by(host_species) |> 
-  summarise(n = n()) |> print(n = 35) # 35 host species
-df_otus_sub_mammals |> ncol() # 31,451 OTUs
-df_otus_sub_mammals |> sum() # total reads = 11,086,194
+df_metadata_sub_mammals %>% nrow() # 312 samples
+df_metadata_sub_mammals %>% group_by(host_species) %>% 
+  summarise(n = n()) %>% print(n = 35) # 35 host species
+df_otus_sub_mammals %>% ncol() # 31,451 OTUs
+df_otus_sub_mammals %>% sum() # total reads = 11,086,194
 
 # per sample
 mean(rowSums(df_otus_sub_mammals)) # mean number of reads = 35,532.67
 sd(rowSums(df_otus_sub_mammals)) # 23,866.22
 
-otus_per_sample_mammals = df_otus_sub_mammals |> mutate(total_otus = rowSums(df_otus_sub_mammals != 0)) |> rownames_to_column() |> 
+otus_per_sample_mammals = df_otus_sub_mammals %>% mutate(total_otus = rowSums(df_otus_sub_mammals != 0)) %>% rownames_to_column() %>% 
   select(rowname, total_otus)
 
-otus_per_sample_mammals = df_metadata_sub_mammals |> 
-  # rename(rowname = sample_id) |> 
-  rownames_to_column() |> 
-  full_join(otus_per_sample_mammals) |> 
+otus_per_sample_mammals = df_metadata_sub_mammals %>% 
+  # rename(rowname = sample_id) %>% 
+  rownames_to_column() %>% 
+  full_join(otus_per_sample_mammals) %>% 
   select(rowname, host_class, host_scientific_name, total_otus)
 
-otus_per_sample_mammals |> summarise(mean(total_otus), median(total_otus), max(total_otus), min(total_otus))
+otus_per_sample_mammals %>% summarise(mean(total_otus), median(total_otus), max(total_otus), min(total_otus))
 # mean 1062, median 1004, max 2473, min 209
 
 #### birds ####
-df_metadata_sub_birds |> nrow() # 63 samples
-df_metadata_sub_birds |> group_by(host_species) |> 
-  summarise(n = n()) |> print(n = 100) # 10 host species
-df_otus_sub_birds |> ncol() # 13,915
-df_otus_sub_birds |> sum() # total reads = 1,999,073
+df_metadata_sub_birds %>% nrow() # 63 samples
+df_metadata_sub_birds %>% group_by(host_species) %>% 
+  summarise(n = n()) %>% print(n = 100) # 10 host species
+df_otus_sub_birds %>% ncol() # 13,915
+df_otus_sub_birds %>% sum() # total reads = 1,999,073
 
 # per sample
 mean(rowSums(df_otus_sub_birds)) # mean number of reads = 31,731.32
 sd(rowSums(df_otus_sub_birds)) # 26,244.05
 
 # per sample
-otus_per_sample_birds = df_otus_sub_birds |> mutate(total_otus = rowSums(df_otus_sub_birds != 0)) |> rownames_to_column() |> 
+otus_per_sample_birds = df_otus_sub_birds %>% mutate(total_otus = rowSums(df_otus_sub_birds != 0)) %>% rownames_to_column() %>% 
   select(rowname, total_otus)
 
-otus_per_sample_birds = df_metadata_sub_birds |> 
-  # rename(rowname = sample_id) |> 
-  rownames_to_column() |> 
-  full_join(otus_per_sample_birds) |> 
+otus_per_sample_birds = df_metadata_sub_birds %>% 
+  # rename(rowname = sample_id) %>% 
+  rownames_to_column() %>% 
+  full_join(otus_per_sample_birds) %>% 
   select(rowname, host_class, host_scientific_name, total_otus)
 
-otus_per_sample_birds |> summarise(mean(total_otus), median(total_otus), max(total_otus), min(total_otus))
+otus_per_sample_birds %>% summarise(mean(total_otus), median(total_otus), max(total_otus), min(total_otus))
 # mean 807, median 695, max 2817, min 114
 
 #### compare classes ####
@@ -224,14 +223,14 @@ df_otus_sub %>%
   select(all_of(ls_bifido)) %>%
   summarise(across(everything(), ~ sum(., na.rm = TRUE))) %>% 
   sum() # 2685
-# Bifido: 2685/13085267*100 = 0.02051926 %
+# Bifido: 2685/13085267*100 = 0.02051926 % of sequences
 
 # Limosilact OTUs
 df_otus_sub %>% 
   select(all_of(ls_limosi)) %>% # all Limosilact OTUs
   summarise(across(everything(), ~ sum(., na.rm = TRUE))) %>% 
   sum() # 59335
-# Limosilact: 59335/13085267*100 = 0.4534489 %
+# Limosilact: 59335/13085267*100 = 0.4534489 % of sequences
 
 #### relative abundances ####  
 ####_ all hosts #### 
@@ -266,28 +265,28 @@ standf = function(x, t = total_birds) round(t * (x / sum(x)))
 ps_norm_birds = transform_sample_counts(ps_birds_sub, standf)
 
 # convert ps to a tidy data frame
-relab_birds_df = ps_norm_birds |>
-  psmelt() |>
-  group_by(Sample, phylum) |>
-  summarize(Abundance = sum(Abundance), .groups = "drop") |>
+relab_birds_df = ps_norm_birds %>%
+  psmelt() %>%
+  group_by(Sample, phylum) %>%
+  summarize(Abundance = sum(Abundance), .groups = "drop") %>%
   mutate(RelativeAbundance = Abundance / sum(Abundance))
 
 # get top 10 phyla
-top_phyla_birds = relab_birds_df |>
-  group_by(phylum) |>
-  summarize(TotalAbundance = sum(Abundance), .groups = "drop") |>
-  arrange(desc(TotalAbundance)) |>
-  slice_head(n = 10) |>
+top_phyla_birds = relab_birds_df %>%
+  group_by(phylum) %>%
+  summarize(TotalAbundance = sum(Abundance), .groups = "drop") %>%
+  arrange(desc(TotalAbundance)) %>%
+  slice_head(n = 10) %>%
   pull(phylum)
 
 # reclassify other phyla as "Other"
-relab_birds_df = relab_birds_df |>
+relab_birds_df = relab_birds_df %>%
   mutate(phylum = ifelse(phylum %in% top_phyla_birds, phylum, "Other"))
 
 # recalculate relative abundances with new categories
-relab_birds_df = relab_birds_df |>
-  group_by(Sample, phylum) |>
-  summarize(Abundance = sum(Abundance), .groups = "drop") |>
+relab_birds_df = relab_birds_df %>%
+  group_by(Sample, phylum) %>%
+  summarize(Abundance = sum(Abundance), .groups = "drop") %>%
   mutate(RelativeAbundance = Abundance / sum(Abundance))
 
 # relative abundances plot - birds
@@ -306,24 +305,24 @@ plot_relab_birds
 #### dominant taxa #### 
 # all hosts
 fantaxtic::top_taxa(ps_sub, n = 3, tax_level = "phylum")
-#Firmicutes 0.395, Proteobacteria 0.316, Bacteroidetes 0.177
+# Firmicutes 0.395, Proteobacteria 0.316, Bacteroidetes 0.177
 
 fantaxtic::top_taxa(ps_sub, n = 5, tax_level = "class")
-#Clostridia 0.233, Gammaproteobacteria 0.169, Bacilli 0.150, Bacteroidia 0.0838, Alphaproteobacteria 0.0714
+# Clostridia 0.233, Gammaproteobacteria 0.169, Bacilli 0.150, Bacteroidia 0.0838, Alphaproteobacteria 0.0714
 
 # mammals
 fantaxtic::top_taxa(ps_mammals_sub, n = 3, tax_level = "phylum")
-#Firmicutes 0.395, Proteobacteria 0.311, Bacteroidetes 0.184
+# Firmicutes 0.395, Proteobacteria 0.311, Bacteroidetes 0.184
 
 fantaxtic::top_taxa(ps_mammals_sub, n = 5, tax_level = "class")
-#Clostridia 0.245, Gammaproteobacteria 0.168, Bacilli 0.137, Bacteroidia 0.0930, Alphaproteobacteria 0.0711
+# Clostridia 0.245, Gammaproteobacteria 0.168, Bacilli 0.137, Bacteroidia 0.0930, Alphaproteobacteria 0.0711
 
 # birds
 fantaxtic::top_taxa(ps_birds_sub, n = 3, tax_level = "phylum")
-#Firmicutes 0.396, Proteobacteria 0.338, Bacteroidetes 0.144)
+# Firmicutes 0.396, Proteobacteria 0.338, Bacteroidetes 0.144)
 
 fantaxtic::top_taxa(ps_birds_sub, n = 5, tax_level = "class")
-#Bacilli 0.211, Clostridia 0.175, Gammaproteobacteria 0.173, Alphaproteobacteria 0.0730, Betaproteobacteria 0.0645
+# Bacilli 0.211, Clostridia 0.175, Gammaproteobacteria 0.173, Alphaproteobacteria 0.0730, Betaproteobacteria 0.0645
 
 ################ ALPHA DIVERSITY ################
 
@@ -372,7 +371,7 @@ summary(model_adiv_faith)
 comparisons_class = list(c("c__Aves", "c__Mammalia"))
 
 # obs OTUs
-class_obs = df_metadata_sub |>
+class_obs = df_metadata_sub %>%
   ggplot(aes(x = host_class, y = adiv_observed_otus, fill = host_class)) +
   geom_boxplot() +
   theme(legend.position = "none",
@@ -385,7 +384,7 @@ class_obs = df_metadata_sub |>
   stat_compare_means(method = "wilcox.test", comparisons = comparisons_class, label = "p.signif")
 
 # chao1 
-class_chao = df_metadata_sub |>
+class_chao = df_metadata_sub %>%
   ggplot(aes(x = host_class, y = adiv_chao1, fill = host_class)) +
   geom_boxplot() +
   theme(legend.position = "none",
@@ -398,7 +397,7 @@ class_chao = df_metadata_sub |>
   stat_compare_means(method = "wilcox.test", comparisons = comparisons_class, label = "p.signif")
 
 # shannon 
-class_shannon = df_metadata_sub |>
+class_shannon = df_metadata_sub %>%
   ggplot(aes(x = host_class, y = adiv_shannon, fill = host_class)) +
   geom_boxplot() +
   theme(legend.position = "none",
@@ -410,7 +409,7 @@ class_shannon = df_metadata_sub |>
   stat_compare_means(method = "wilcox.test", comparisons = comparisons_class, label = "p.signif")
 
 # faith
-class_faith = df_metadata_sub |>
+class_faith = df_metadata_sub %>%
   ggplot(aes(x = host_class, y = adiv_faith_pd, fill = host_class)) +
   geom_boxplot() +
   theme(legend.position = "none",
@@ -430,7 +429,7 @@ sociality_order = c("solitary", "intermediate", "social")
 df_metadata_sub$basic_sociality = factor(df_metadata_sub$basic_sociality, levels = sociality_order)
 
 # obs
-soc_obs = df_metadata_sub |>
+soc_obs = df_metadata_sub %>%
   ggplot(aes(x = basic_sociality, y = adiv_observed_otus, fill = basic_sociality)) +
   #geom_violin() +
   geom_boxplot() +
@@ -442,7 +441,7 @@ soc_obs = df_metadata_sub |>
   scale_fill_viridis_d()
 
 # chao1
-soc_chao = df_metadata_sub |>
+soc_chao = df_metadata_sub %>%
   ggplot(aes(x = basic_sociality, y = adiv_chao1, fill = basic_sociality)) +
   geom_boxplot() +
   theme(legend.position = "none",
@@ -453,7 +452,7 @@ soc_chao = df_metadata_sub |>
   scale_fill_viridis_d()
 
 # shannon
-soc_shannon = df_metadata_sub |>
+soc_shannon = df_metadata_sub %>%
   ggplot(aes(x = basic_sociality, y = adiv_shannon, fill = basic_sociality)) +
   geom_boxplot() +
   theme(legend.position = "none",
@@ -463,7 +462,7 @@ soc_shannon = df_metadata_sub |>
   scale_fill_viridis_d()
 
 # faith
-soc_faith = df_metadata_sub |>
+soc_faith = df_metadata_sub %>%
   ggplot(aes(x = basic_sociality, y = adiv_faith_pd, fill = basic_sociality)) +
   #geom_violin() +
   geom_boxplot() +
@@ -666,19 +665,19 @@ anova(mod1_conditioned_birds, by = "margin", permutations = 999)
 RsquareAdj(mod1_conditioned_birds)
 
 # _ plot all hosts ----
-df_metadata_sub = df_metadata_sub |> rownames_to_column() |> rename("sample_id" = "rowname")
+df_metadata_sub = df_metadata_sub %>% rownames_to_column() %>% rename("sample_id" = "rowname")
 
 # species
-rda_scores_sp_df = rda_sp_all |> 
-  scores(display = "sites") |> # extract the site scores
-  as.data.frame() |> 
-  rownames_to_column() |> 
-  mutate(sample_id = rowname) |> #add a sample_id column
+rda_scores_sp_df = rda_sp_all %>% 
+  scores(display = "sites") %>% # extract the site scores
+  as.data.frame() %>% 
+  rownames_to_column() %>% 
+  mutate(sample_id = rowname) %>% #add a sample_id column
   left_join(df_metadata_sub, by = "sample_id")
 
 gg_ordiplot(rda_sp_all, groups = df_metadata_sub$host_species, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 4.35%, CAP2 1.39%
 
-rda_scores_sp_df |> 
+rda_scores_sp_df %>% 
   ggplot(aes(x = CAP1, y = CAP2, colour = host_species, shape = host_class)) +
   geom_point(size = 2) +
   geom_vline(xintercept = 0, linetype = "dotted") + 
@@ -697,16 +696,16 @@ rda_scores_sp_df |>
   ggtitle("A")
 
 # diet
-rda_scores_diet_df = rda_diet_all |> 
-  scores(display = "sites") |> # extract the site scores
-  as.data.frame() |> 
-  rownames_to_column() |> 
-  mutate(sample_id = rowname) |> #add a sample_id column
+rda_scores_diet_df = rda_diet_all %>% 
+  scores(display = "sites") %>% # extract the site scores
+  as.data.frame() %>% 
+  rownames_to_column() %>% 
+  mutate(sample_id = rowname) %>% #add a sample_id column
   left_join(df_metadata_sub, by = "sample_id")
 
 gg_ordiplot(rda_diet_all, groups = df_metadata_sub$basic_diet, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 1.13%, CAP2 0.67%
 
-rda_scores_diet_df |> 
+rda_scores_diet_df %>% 
   ggplot(aes(x = CAP1, y = CAP2, colour = basic_diet, shape = host_class)) +
   geom_point(size = 2) +
   geom_vline(xintercept = 0, linetype = "dotted") + 
@@ -724,16 +723,16 @@ rda_scores_diet_df |>
   ggtitle("B")
 
 # sociality
-rda_scores_social_df = rda_social_all |> 
-  scores(display = "sites") |> # extract the site scores
-  as.data.frame() |> 
-  rownames_to_column() |> 
-  mutate(sample_id = rowname) |> #add a sample_id column
+rda_scores_social_df = rda_social_all %>% 
+  scores(display = "sites") %>% # extract the site scores
+  as.data.frame() %>% 
+  rownames_to_column() %>% 
+  mutate(sample_id = rowname) %>% #add a sample_id column
   left_join(df_metadata_sub, by = "sample_id")
 
 gg_ordiplot(rda_social_all, groups = df_metadata_sub$basic_sociality, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 1.66%, CAP2 0.52%
 
-rda_scores_social_df |> 
+rda_scores_social_df %>% 
   ggplot(aes(x = CAP1, y = CAP2, colour = basic_sociality, shape = host_class)) +
   geom_point(size = 2) +
   geom_vline(xintercept = 0, linetype = "dotted") + 
@@ -752,16 +751,16 @@ rda_scores_social_df |>
 
 # _ plot mammals ----
 # species
-rda_scores_sp_mammals_df = rda_sp_mammals |> 
-  scores(display = "sites") |> # extract the site scores
-  as.data.frame() |> 
-  rownames_to_column() |> 
-  mutate(sample_id = rowname) |> #add a sample_id column
+rda_scores_sp_mammals_df = rda_sp_mammals %>% 
+  scores(display = "sites") %>% # extract the site scores
+  as.data.frame() %>% 
+  rownames_to_column() %>% 
+  mutate(sample_id = rowname) %>% #add a sample_id column
   left_join(df_metadata_sub, by = "sample_id")
 
 gg_ordiplot(rda_sp_mammals, groups = df_metadata_sub_mammals$host_species, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 4.52%, CAP2 1.57%
 
-rda_scores_sp_mammals_df |> 
+rda_scores_sp_mammals_df %>% 
   ggplot(aes(x = CAP1, y = CAP2, colour = host_species, shape = basic_diet)) +
   geom_point(size = 2) +
   geom_vline(xintercept = 0, linetype = "dotted") + 
@@ -779,16 +778,16 @@ rda_scores_sp_mammals_df |>
   ggtitle("A (mammals)")
 
 # diet
-rda_scores_diet_mammals_df = rda_diet_mammals |> 
-  scores(display = "sites") |> # extract the site scores
-  as.data.frame() |> 
-  rownames_to_column() |> 
-  mutate(sample_id = rowname) |> #add a sample_id column
+rda_scores_diet_mammals_df = rda_diet_mammals %>% 
+  scores(display = "sites") %>% # extract the site scores
+  as.data.frame() %>% 
+  rownames_to_column() %>% 
+  mutate(sample_id = rowname) %>% #add a sample_id column
   left_join(df_metadata_sub, by = "sample_id")
 
 gg_ordiplot(rda_diet_mammals, groups = df_metadata_sub_mammals$basic_diet, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 1.28%, CAP2 0.19%
 
-rda_scores_diet_mammals_df |> 
+rda_scores_diet_mammals_df %>% 
   ggplot(aes(x = CAP1, y = CAP2, colour = basic_diet, shape = basic_sociality)) +
   geom_point() +
   geom_vline(xintercept = 0, linetype = "dotted") + 
@@ -808,16 +807,16 @@ rda_scores_diet_mammals_df |>
   ggtitle("B (mammals)")
 
 # sociality
-rda_scores_social_mammals_df = rda_social_mammals |> 
-  scores(display = "sites") |> # extract the site scores
-  as.data.frame() |> 
-  rownames_to_column() |> 
-  mutate(sample_id = rowname) |> #add a sample_id column
+rda_scores_social_mammals_df = rda_social_mammals %>% 
+  scores(display = "sites") %>% # extract the site scores
+  as.data.frame() %>% 
+  rownames_to_column() %>% 
+  mutate(sample_id = rowname) %>% #add a sample_id column
   left_join(df_metadata_sub, by = "sample_id")
 
 gg_ordiplot(rda_social_mammals, groups = df_metadata_sub_mammals$basic_sociality, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 2.03%, CAP2 0.70%
 
-rda_scores_social_mammals_df |> 
+rda_scores_social_mammals_df %>% 
   ggplot(aes(x = CAP1, y = CAP2, colour = basic_sociality)) +
   geom_point() +
   geom_vline(xintercept = 0, linetype = "dotted") + 
@@ -836,19 +835,19 @@ rda_scores_social_mammals_df |>
   ggtitle("C (mammals)")
 
 # _ plot birds ----
-df_metadata_sub_birds = df_metadata_sub_birds |> rownames_to_column() |> rename("sample_id" = "rowname")
+df_metadata_sub_birds = df_metadata_sub_birds %>% rownames_to_column() %>% rename("sample_id" = "rowname")
 
 # species
-rda_scores_sp_birds_df = rda_sp_birds |> 
-  scores(display = "sites") |> # extract the site scores
-  as.data.frame() |> 
-  rownames_to_column() |> 
-  mutate(sample_id = rowname) |> #add a sample_id column
+rda_scores_sp_birds_df = rda_sp_birds %>% 
+  scores(display = "sites") %>% # extract the site scores
+  as.data.frame() %>% 
+  rownames_to_column() %>% 
+  mutate(sample_id = rowname) %>% #add a sample_id column
   left_join(df_metadata_sub, by = "sample_id")
 
 gg_ordiplot(rda_sp_birds, groups = df_metadata_sub_birds$host_species, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 10.65%, CAP2 4.17%
 
-rda_scores_sp_birds_df |> 
+rda_scores_sp_birds_df %>% 
   ggplot(aes(x = CAP1, y = CAP2, colour = host_scientific_name, shape = basic_diet)) +
   geom_point(size = 2) +
   geom_vline(xintercept = 0, linetype = "dotted") + 
@@ -866,16 +865,16 @@ rda_scores_sp_birds_df |>
   ggtitle("A (birds)")
 
 # diet
-rda_scores_diet_birds_df = rda_diet_birds |> 
-  scores(display = "sites") |> # extract the site scores
-  as.data.frame() |> 
-  rownames_to_column() |> 
-  mutate(sample_id = rowname) |> # add a sample_id column
+rda_scores_diet_birds_df = rda_diet_birds %>% 
+  scores(display = "sites") %>% # extract the site scores
+  as.data.frame() %>% 
+  rownames_to_column() %>% 
+  mutate(sample_id = rowname) %>% # add a sample_id column
   left_join(df_metadata_sub, by = "sample_id")
 
 gg_ordiplot(rda_diet_birds, groups = df_metadata_sub_birds$basic_diet, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 3.82% (no other axes)
 
-rda_scores_diet_birds_df |> 
+rda_scores_diet_birds_df %>% 
   ggplot(aes(x = CAP1, y = MDS1, colour = basic_diet, shape = basic_sociality)) +
   geom_point() +
   geom_vline(xintercept = 0, linetype = "dotted") + 
@@ -895,16 +894,16 @@ rda_scores_diet_birds_df |>
   ggtitle("B (birds)")
 
 # sociality
-rda_scores_social_birds_df = rda_social_birds |> 
-  scores(display = "sites") |> # extract the site scores
-  as.data.frame() |> 
-  rownames_to_column() |> 
-  mutate(sample_id = rowname) |> #add a sample_id column
+rda_scores_social_birds_df = rda_social_birds %>% 
+  scores(display = "sites") %>% # extract the site scores
+  as.data.frame() %>% 
+  rownames_to_column() %>% 
+  mutate(sample_id = rowname) %>% #add a sample_id column
   left_join(df_metadata_sub, by = "sample_id")
 
 gg_ordiplot(rda_social_birds, groups = df_metadata_sub_birds$basic_sociality, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 4.07%, CAP2 1.16%
 
-rda_scores_social_birds_df |> 
+rda_scores_social_birds_df %>% 
   ggplot(aes(x = CAP1, y = CAP2, colour = basic_sociality)) +
   geom_point() +
   geom_vline(xintercept = 0, linetype = "dotted") + 
@@ -943,123 +942,134 @@ disp_data <- data.frame(
 # filter to species with at least 5 samples
 disp_data_n = disp_data %>% 
   group_by(species) %>% 
-  summarise(n = n()) %>% 
-  rename(host_species = species)
+  summarise(n = n())
 
 disp_data = disp_data %>% 
   left_join(disp_data_n) %>% 
   filter(n > 4) %>% 
   rename(host_species = species)
 
-# add PhyPC1:5 
-
-df_metadata_n = disp_data %>% 
-  group_by(species) %>% 
-  summarise(n = n()) %>% 
-  rename(host_species = species)
-
-
-disp_data2 = df_metadata_sub %>%
-  left_join(disp_data_n) %>% 
-  filter(n > 4) %>% 
-  select(host_species, starts_with("Phy")) #%>% 
-  right_join(disp_data, by = "host_species")
-
-# plot dispersion per species
 disp_data %>% 
-  ggplot(aes(x = species, y = distance, fill = sociality)) +
-  geom_boxplot() +
-  coord_flip() +  # flip to make horizontal
-  labs(
-    title = "Microbiome Dispersion by Species",
-    x = "Host Species",
-    y = "Distance to Centroid",
-    fill = "Sociality"
-  ) +
-  theme_minimal()
+  distinct(host_species) # 15 species, 309 observations
 
-# TODO ####
-# 1. change order and colours to look like previous plot
+# add PhyPC1:5 from metadata with n > 4
+df_metadata_phy = df_metadata_sub %>% 
+  select(host_species, host_scientific_name, host_genus, starts_with("Phy")) %>% 
+  distinct(host_species, .keep_all = TRUE) # keep Phy columns
 
-# 2. run PGLMM? (test assumptions) on dispersion ~ species, something like this:
+disp_data = disp_data %>%
+  left_join(df_metadata_phy)
 
-model_disp_soc <- pglmm(
-  distance ~ basic_sociality + (1|host_scientific_name), # need the random effect?
+# set reference level to 'social'
+disp_data$sociality <- factor(disp_data$sociality, levels = c("social", "intermediate", "solitary"))
+
+# test whether sociality predicts distance, weight by sqrt(n) bc more samples = more reliable estimate
+species_model_weighted <- lmer(
+  distance ~ sociality + (1|host_species),
   data = disp_data,
-  family = "gaussian",
-  cov_ranef = list(host_scientific_name = host_phylo)
+  weights = sqrt(n)
 )
+
+cat("\n=== Weighted Species-Level Analysis ===\n")
+summary(species_model_weighted)
+anova(species_model_weighted)
+jtools::summ(species_model_weighted) # sociality not sig
+
+#### TODO plot #####
+
+# ordering
+disp_data = disp_data %>%
+  mutate(sociality = fct_relevel(sociality, c("social", "intermediate", "solitary"))) %>%
+  arrange(sociality, n) %>% # reorder by sociality then sample size
+  mutate(host_scientific_name = factor(host_scientific_name, levels = unique(host_scientific_name)))
+
+# plot dispersion distances, ordered by sociality and sample size
+disp_data %>% 
+  # order
+  mutate(sociality = fct_relevel(sociality, "social", "intermediate", "solitary"), host_species = factor(host_species, levels = levels(n))) %>% 
+  # plot
+  ggplot(aes(x = host_scientific_name, y = distance, fill = sociality)) +
+  geom_boxplot(width = 0.6) +
+  scale_fill_viridis_d(name = "Sociality") +
+  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 140, by = 20)) +
+  geom_text(data = disp_data, aes(host_scientific_name, Inf, label = n), hjust = "inward") +
+  labs(x = "Host species", y = "Distance from centroid") +
+  theme(text = element_text(size = 14),
+        axis.text.y = element_text(face = "italic")) +
+  guides(fill = guide_legend(reverse = TRUE)) +
+  coord_flip()
+
 
 ################ DIFFERENTIAL ABUNDANCE ################
 
 ##### setup #####
 
 # all hosts
-df_metadata_sub_da = df_metadata_sub |> 
-  filter(basic_sociality != "intermediate") |> # exclude intermediate sociality
+df_metadata_sub_da = df_metadata_sub %>% 
+  filter(basic_sociality != "intermediate") %>% # exclude intermediate sociality
   column_to_rownames("sample_id") # bring rownames back
 
 # subsample otu table
 common_samples_sub_da = intersect(rownames(mx_otus), rownames(df_metadata_sub_da))
 
-df_otus_sub_da = df_otus_sub |>
-  rownames_to_column() |>
-  filter(rowname %in% common_samples_sub_da) |> 
-  column_to_rownames("rowname") |>
+df_otus_sub_da = df_otus_sub %>%
+  rownames_to_column() %>%
+  filter(rowname %in% common_samples_sub_da) %>% 
+  column_to_rownames("rowname") %>%
   select(where(~ sum(.) != 0))
 
 # mammals
-df_metadata_sub_mammals_da = df_metadata_sub |> 
-  filter(basic_sociality != "intermediate") |>
-  filter(host_class == "c__Mammalia") |> 
+df_metadata_sub_mammals_da = df_metadata_sub %>% 
+  filter(basic_sociality != "intermediate") %>%
+  filter(host_class == "c__Mammalia") %>% 
   column_to_rownames("sample_id")
 
 common_samples_sub_mammals_da = intersect(rownames(mx_otus), rownames(df_metadata_sub_mammals_da))
 
-df_otus_sub_mammals_da = df_otus_sub |>
-  rownames_to_column() |>
-  filter(rowname %in% common_samples_sub_mammals_da) |> 
-  column_to_rownames("rowname") |>
+df_otus_sub_mammals_da = df_otus_sub %>%
+  rownames_to_column() %>%
+  filter(rowname %in% common_samples_sub_mammals_da) %>% 
+  column_to_rownames("rowname") %>%
   select(where(~ sum(.) != 0))
 
 # birds
-df_metadata_sub_birds_da = df_metadata_sub |> 
-  filter(basic_sociality != "intermediate") |>
-  filter(host_class == "c__Aves") |> 
+df_metadata_sub_birds_da = df_metadata_sub %>% 
+  filter(basic_sociality != "intermediate") %>%
+  filter(host_class == "c__Aves") %>% 
   column_to_rownames("sample_id")
 
 common_samples_sub_birds_da = intersect(rownames(mx_otus), rownames(df_metadata_sub_birds_da))
 
-df_otus_sub_birds_da = df_otus_sub |>
-  rownames_to_column() |>
-  filter(rowname %in% common_samples_sub_birds_da) |> 
-  column_to_rownames("rowname") |>
+df_otus_sub_birds_da = df_otus_sub %>%
+  rownames_to_column() %>%
+  filter(rowname %in% common_samples_sub_birds_da) %>% 
+  column_to_rownames("rowname") %>%
   select(where(~ sum(.) != 0))
 
 # run this on the server only
 # all hosts
-v_social_da = df_metadata_sub_da |> pull(basic_sociality)
+v_social_da = df_metadata_sub_da %>% pull(basic_sociality)
 social_clr = aldex.clr(t(df_otus_sub_da), v_social_da, mc.samples = 200) #basic_sociality is a character vector, so aldex sorts it alphabetically -> social is the reference group
 social_ttest = aldex.ttest(social_clr) #do not run on laptop
 aldex_social_effect = aldex.effect(social_clr, CI = TRUE)
 social_aldex_all = data.frame(social_ttest, aldex_social_effect)
-social_aldex_all = social_aldex_all |> rownames_to_column()
+social_aldex_all = social_aldex_all %>% rownames_to_column()
 
 # mammals
-v_social_da_mammals = df_metadata_sub_mammals_da |> pull(basic_sociality)
+v_social_da_mammals = df_metadata_sub_mammals_da %>% pull(basic_sociality)
 social_clr_mammals = aldex.clr(t(df_otus_sub_mammals_da), v_social_da_mammals, mc.samples = 200)
 social_ttest_mammals = aldex.ttest(social_clr_mammals)
 aldex_social_effect_mammals = aldex.effect(social_clr_mammals, CI = TRUE)
 social_aldex_mammals = data.frame(social_ttest_mammals, aldex_social_effect_mammals)
-social_aldex_mammals = social_aldex_mammals |> rownames_to_column()
+social_aldex_mammals = social_aldex_mammals %>% rownames_to_column()
 
 # birds
-v_social_da_birds = df_metadata_sub_birds_da |> pull(basic_sociality)
+v_social_da_birds = df_metadata_sub_birds_da %>% pull(basic_sociality)
 social_clr_birds = aldex.clr(t(df_otus_sub_birds_da), v_social_da_birds, mc.samples = 200)
 social_ttest_birds = aldex.ttest(social_clr_birds)
 aldex_social_effect_birds = aldex.effect(social_clr_birds, CI = TRUE)
 social_aldex_birds = data.frame(social_ttest_birds, aldex_social_effect_birds)
-social_aldex_birds = social_aldex_birds |> rownames_to_column()
+social_aldex_birds = social_aldex_birds %>% rownames_to_column()
 
 write_csv(social_aldex_all, "social_aldex_all.csv")
 write_csv(social_aldex_mammals, "social_aldex_mammals.csv")
@@ -1078,21 +1088,21 @@ aldex.plot(social_aldex_all, type = "MA", test = "welch", main = "MA plot")
 aldex.plot(social_aldex_all, type = "MW", test = "welch", main = "effect plot")
 
 # identify OTUs by name
-taxonomy_table = p_tax |> as.data.frame() |> rownames_to_column()
+taxonomy_table = p_tax %>% as.data.frame() %>% rownames_to_column()
 
 # generate df of differentially abundant OTUs
-social_diff_asvs_mammals = social_aldex_mammals |> 
-  filter(we.eBH < 0.001) |> 
-  rownames_to_column("...1") |> 
-  left_join(taxonomy_table, by = "rowname") |> # add ASV taxonomical info
-  replace_na(list(genus = "")) |>
-  replace_na(list(species = "sp.")) |>
-  mutate(across(c("genus"), substr, 6, nchar(genus))) |> 
-  mutate(across(c("species"), substr, 6, nchar(species))) |> 
-  mutate(ci_product = effect.low * effect.high ) |> #column that returns TRUE if CI does not contain 0# |> 
+social_diff_asvs_mammals = social_aldex_mammals %>% 
+  filter(we.eBH < 0.001) %>% 
+  rownames_to_column("...1") %>% 
+  left_join(taxonomy_table, by = "rowname") %>% # add ASV taxonomical info
+  replace_na(list(genus = "")) %>%
+  replace_na(list(species = "sp.")) %>%
+  mutate(across(c("genus"), substr, 6, nchar(genus))) %>% 
+  mutate(across(c("species"), substr, 6, nchar(species))) %>% 
+  mutate(ci_product = effect.low * effect.high ) %>% #column that returns TRUE if CI does not contain 0# %>% 
   mutate(ci_no_zero = ci_product > 0) #returns TRUE if CI does not include zero
 
-social_diff_asvs_mammals |> 
+social_diff_asvs_mammals %>% 
   ggplot(aes(x = effect, y = reorder(species, (effect*-1)), colour = phylum)) +
   geom_point(size = 2.5) +
   scale_colour_viridis_d(labels = c("Actinobacteria", "Bacteroidetes", "Firmicutes", "Proteobacteria")) +
@@ -1105,15 +1115,15 @@ social_diff_asvs_mammals |>
 # since social is the reference group, effect < 0 means OTU is higher in social
 
 # birds
-social_diff_asvs_birds = social_aldex_birds |>
-  filter(we.eBH < 0.05) |> #we.eBH = expected Benjamini-Hochberg corrected p-value of Welch’s t test (higher p still yields 0 differentially abundant OTUs)
-  rownames_to_column("...1") |> 
-  left_join(taxonomy_table, by = "rowname") |> # add ASV taxonomical info
-  replace_na(list(genus = "")) |>
-  replace_na(list(species = "sp.")) |>
-  mutate(otu_scientific_name = paste(genus, species, sep = " ")) |> #concatenate to full ASV name
-  mutate(otu_scientific_name = str_trim(otu_scientific_name, side = "left")) |>
-  mutate(otu_scientific_name = as.factor(otu_scientific_name)) |> 
-  mutate(ci_product = effect.low * effect.high ) |> #column that returns TRUE if CI does not contain 0# |> 
+social_diff_asvs_birds = social_aldex_birds %>%
+  filter(we.eBH < 0.05) %>% #we.eBH = expected Benjamini-Hochberg corrected p-value of Welch’s t test (higher p still yields 0 differentially abundant OTUs)
+  rownames_to_column("...1") %>% 
+  left_join(taxonomy_table, by = "rowname") %>% # add ASV taxonomical info
+  replace_na(list(genus = "")) %>%
+  replace_na(list(species = "sp.")) %>%
+  mutate(otu_scientific_name = paste(genus, species, sep = " ")) %>% #concatenate to full ASV name
+  mutate(otu_scientific_name = str_trim(otu_scientific_name, side = "left")) %>%
+  mutate(otu_scientific_name = as.factor(otu_scientific_name)) %>% 
+  mutate(ci_product = effect.low * effect.high ) %>% #column that returns TRUE if CI does not contain 0# %>% 
   mutate(ci_no_zero = ci_product > 0) #returns TRUE if CI does not include zero
 #there are no differentially abundant OTUs in birds
