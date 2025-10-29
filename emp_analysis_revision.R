@@ -963,17 +963,16 @@ disp_data = disp_data %>%
 # set reference level to 'social'
 disp_data$sociality <- factor(disp_data$sociality, levels = c("social", "intermediate", "solitary"))
 
-# test whether sociality predicts distance, weight by sqrt(n) bc more samples = more reliable estimate
-species_model_weighted <- lmer(
-  distance ~ sociality + (1|host_scientific_name),
-  data = disp_data,
-  weights = sqrt(n)
-)
+# test mean dispersion per species, weighted by sample size bc more samples = more reliable estimate
+species_disp <- disp_data %>%
+  group_by(host_scientific_name, sociality) %>%
+  summarise(mean_distance = mean(distance), n = n())
 
-cat("\n=== Weighted Species-Level Analysis ===\n")
-summary(species_model_weighted)
-anova(species_model_weighted)
-jtools::summ(species_model_weighted) # sociality not sig
+lm_weighted <- lm(mean_distance ~ sociality, data = species_disp, weights = n)
+summary(lm_weighted)
+
+# check model assumptions
+plot(lm_weighted) # residuals vs fitted (homoscedasticity) and qq plot (normality of residuals) look good
 
 #### TODO plot #####
 
@@ -984,10 +983,7 @@ disp_data = disp_data %>%
   mutate(host_scientific_name = factor(host_scientific_name, levels = unique(host_scientific_name)))
 
 # plot dispersion distances
-disp_data %>% 
-  # order
-  #mutate(sociality = fct_relevel(sociality, "solitary", "intermediate", "social"), host_species = factor(host_species, levels = levels(n))) %>% 
-  # plot
+disp_data %>%
   ggplot(aes(x = host_scientific_name, y = distance, fill = sociality)) +
   geom_boxplot(width = 0.6) +
   scale_fill_viridis_d(name = "Sociality") +
