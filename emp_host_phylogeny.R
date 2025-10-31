@@ -172,3 +172,4 @@ cat(sprintf("Coverage: %d/%d species (%.1f%%)\n",
 # 6) add branch lengths
 host_phylo = host_tree_complete
 host_phylo <- compute.brlen(host_phylo)
+
