@@ -502,22 +502,8 @@ summary(model_adiv_chao1)
 summary(model_adiv_shannon)
 summary(model_adiv_faith)
 
-# check model assumptions
 
-# check homoscedasticity
-fitted_vals <- fitted(model_adiv_observed)
-
-# residuals vs fitted
-plot(fitted_vals, residuals,
-     xlab = "Fitted Values", ylab = "Residuals",
-     main = "Residuals vs Fitted")
-abline(h = 0, col = "red", lwd = 2)
-lines(lowess(fitted_vals, residuals), col = "blue", lwd = 2)
-# looks okay
-
-# run log-transformed model
-
-# 2. run log-transformed version
+# check log-transformed version
 model_log <- pglmm(
   log(adiv_observed_otus) ~ basic_sociality + diet + (1|host_scientific_name),
   data = df_metadata_sub,
