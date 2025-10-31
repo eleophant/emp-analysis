@@ -193,11 +193,11 @@ qq_log_faith <- ggplot(data.frame(resid = residuals(mod_log_faith)), aes(sample 
   theme(plot.title = element_text(size = 12))
 
 #### combine plots ####
-qq_raw_obs_poisson + qq_raw_obs_gaussian + qq_raw_chao + qq_raw_faith + qq_raw_shannon +
+qq_raw_obs_poisson + qq_raw_obs_gaussian + qq_raw_chao +  qq_raw_shannon + qq_raw_faith +
   plot_layout(ncol = 5) +
   plot_annotation(title = "A. Raw")
 
-qq_log_obs_poisson + qq_raw_obs_poisson + qq_log_chao + qq_log_faith + qq_log_shannon +
+qq_log_obs_poisson + qq_raw_obs_gaussian + qq_log_chao + qq_log_shannon + qq_log_faith +
   plot_layout(ncol = 5) +
   plot_annotation(title = "B. Log-transformed")
 
@@ -207,6 +207,7 @@ qq_log_obs_poisson + qq_raw_obs_poisson + qq_log_chao + qq_log_faith + qq_log_sh
 # residuals vs fitted
 
 #### raw ####
+
 plot(fitted_raw_obs_poisson, residuals_raw_obs_poisson,
      xlab = "Fitted Values", ylab = "Residuals",
      main = "Residuals vs Fitted \nObs OTUs (Poisson)")
@@ -238,32 +239,33 @@ abline(h = 0, col = "red", lwd = 2)
 lines(lowess(fitted_raw_faith, residuals_raw_faith), col = "blue", lwd = 2) # looks good
 
 #### log ####
+
 plot(fitted_log_obs_poisson, residuals_log_obs_poisson,
      xlab = "Fitted Values", ylab = "Residuals",
      main = "Residuals vs Fitted \nLog Obs OTUs (Poisson)")
 abline(h = 0, col = "red", lwd = 2)
-lines(lowess(fitted_log_obs_poisson, residuals_log_obs_poisson), col = "blue", lwd = 2) # looks terrible
+lines(lowess(fitted_log_obs_poisson, residuals_log_obs_poisson), col = "blue", lwd = 2) # looks not great
 
 plot(fitted_log_obs_gaussian, residuals_log_obs_gaussian,
      xlab = "Fitted Values", ylab = "Residuals",
      main = "Residuals vs Fitted \nLog Obs OTUs (Gaussian)")
 abline(h = 0, col = "red", lwd = 2)
-lines(lowess(fitted_log_obs_gaussian, residuals_log_obs_gaussian), col = "blue", lwd = 2) # looks much better
+lines(lowess(fitted_log_obs_gaussian, residuals_log_obs_gaussian), col = "blue", lwd = 2) # looks a bit better
 
 plot(fitted_log_chao, residuals_log_chao,
      xlab = "Fitted Values", ylab = "Residuals",
      main = "Residuals vs Fitted \nLog Chao1")
 abline(h = 0, col = "red", lwd = 2)
-lines(lowess(fitted_log_chao, residuals_log_chao), col = "blue", lwd = 2) # looks good
+lines(lowess(fitted_log_chao, residuals_log_chao), col = "blue", lwd = 2)
 
 plot(fitted_log_shannon, residuals_log_shannon,
      xlab = "Fitted Values", ylab = "Residuals",
      main = "Residuals vs Fitted \nLog Shannon")
 abline(h = 0, col = "red", lwd = 2)
-lines(lowess(fitted_log_shannon, residuals_log_shannon), col = "blue", lwd = 2) # looks good
+lines(lowess(fitted_log_shannon, residuals_log_shannon), col = "blue", lwd = 2)
 
 plot(fitted_log_faith, residuals_log_faith,
      xlab = "Fitted Values", ylab = "Residuals",
      main = "Residuals vs Fitted \nLog Faith PD")
 abline(h = 0, col = "red", lwd = 2)
-lines(lowess(fitted_log_faith, residuals_log_faith), col = "blue", lwd = 2) # looks good
+lines(lowess(fitted_log_faith, residuals_log_faith), col = "blue", lwd = 2)
