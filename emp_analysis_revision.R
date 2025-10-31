@@ -46,6 +46,7 @@ df_obs_n %>% summarise(mean(n), median(n), max(n), min(n))
 # subsample metadata
 df_metadata_sub = df_metadata %>% 
   rownames_to_column() %>% 
+  mutate(sample_id = rowname) %>%  # keep a sample_id column
   group_by(host_species) %>% 
   slice_sample(n = 41)  %>%
   ungroup() %>% 
@@ -118,6 +119,124 @@ all(rownames(df_otus_sub_birds) == rownames(df_metadata_sub_birds)) # TRUE
 # phyloseq
 ps_mammals_sub = subset_samples(ps_sub, host_class == "c__Mammalia")
 ps_birds_sub = subset_samples(ps_sub, host_class == "c__Aves")
+
+################ SEQ DEPTH ################
+
+#### setup ####
+sequencing_depth <- rowSums(df_otus_sub)
+
+cat("=== Sequencing Depth Summary ===\n")
+summary(sequencing_depth)
+
+cat("\nStandard deviation:", sd(sequencing_depth), "\n")
+cat("Coefficient of variation:", sd(sequencing_depth) / mean(sequencing_depth), "\n")
+
+cat("\nRange:", min(sequencing_depth), "to", max(sequencing_depth), "\n")
+cat("Fold difference:", max(sequencing_depth) / min(sequencing_depth), "\n")
+
+# create dataframe with depth
+depth_data = data.frame(
+  sample_id = rownames(df_otus_sub),
+  depth = rowSums(df_otus_sub)
+) %>%
+  left_join(
+    df_metadata_sub %>% 
+      select(sample_id, host_scientific_name, basic_sociality, study_id),
+    by = "sample_id"
+  )
+
+# plot histogram
+ggplot(depth_data, aes(x = depth)) +
+  geom_histogram(bins = 50, fill = "skyblue2", color = "black") +
+  geom_vline(xintercept = median(depth_data$depth), 
+             color = "red", linetype = "dashed", size = 1) +
+  labs(
+    title = "Distribution of Sequencing Depth",
+    subtitle = paste("Median =", round(median(depth_data$depth)), "reads"),
+    x = "Sequencing depth (total reads)",
+    y = "Number of samples"
+  ) +
+  theme_minimal()
+# looks highly skewed (long tail)
+
+# log scale version
+ggplot(depth_data, aes(x = depth)) +
+  geom_histogram(bins = 50, fill = "skyblue2", color = "black") +
+  scale_x_log10() +
+  labs(
+    title = "Distribution of Sequencing Depth (Log Scale)",
+    x = "Sequencing depth (log10)",
+    y = "Number of samples"
+  ) +
+  theme_minimal()
+
+### alpha div ####
+
+# check if depth correlates with alpha diversity
+depth_alpha <- data.frame(
+  depth = sequencing_depth,
+  adiv_observed_otus = df_metadata_sub$adiv_observed_otus,
+  adiv_chao1 = df_metadata_sub$adiv_chao1,
+  adiv_shannon = df_metadata_sub$adiv_shannon,
+  adiv_faith_pd = df_metadata_sub$adiv_faith_pd,
+  sociality = df_metadata_sub$basic_sociality
+)
+
+# correlation test
+cor_test_obs_otus <- cor.test(depth_alpha$depth, depth_alpha$adiv_observed_otus, method = "spearman")
+
+cor_test_chao1 <- cor.test(depth_alpha$depth, depth_alpha$adiv_chao1, method = "spearman")
+
+cor_test_shannon <- cor.test(depth_alpha$depth, depth_alpha$adiv_shannon, method = "spearman")
+
+cor_test_faith_pd <- cor.test(depth_alpha$depth, depth_alpha$adiv_faith_pd, method = "spearman")
+
+cat("Spearman correlations between depth and alpha diversity:\n")
+
+print(cor_test_obs_otus) # rho = 0.02309349, p = 0.6558
+print(cor_test_chao1) # rho = 0.01962841, p = 0.7048
+print(cor_test_shannon) # rho = 0.005850495, p = 0.9101
+print(cor_test_obs_otus) # rho = 0.02309349, p = 0.6558
+
+
+# plot
+ggplot(depth_alpha, aes(x = depth, y = alpha_div, color = sociality)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE) +
+  scale_x_log10() +
+  labs(
+    title = "Alpha diversity vs Sequencing Depth",
+    subtitle = paste("Spearman ρ =", round(cor_test$estimate, 3), 
+                     ", p =", format.pval(cor_test$p.value, digits = 3)),
+    x = "Sequencing depth (log10)",
+    y = "Observed OTUs",
+    color = "Sociality"
+  ) +
+  theme_minimal()
+
+
+#### sociality ####
+ggplot(depth_data, aes(x = basic_sociality, y = depth, fill = basic_sociality)) +
+  geom_boxplot(outlier.alpha = 0.5) +
+  geom_jitter(width = 0.2, alpha = 0.3) +
+  scale_y_log10() +
+  labs(
+    title = "Sequencing depth by sociality level",
+    x = "Sociality",
+    y = "Sequencing depth (log10)",
+    fill = "Sociality"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+# looks like solitary has lower sequencing depth
+
+kruskal.test(depth ~ basic_sociality, data = depth_data)
+# chi-squared = 53.15, df = 2, p = 2.875e-12
+
+# pairwise comparisons
+pairwise.wilcox.test(depth_data$depth, depth_data$basic_sociality, p.adjust.method = "BH")
+# sig: solitary vs social, solitary vs intermediate
+
 
 ################ DATA EXPLORATION ################
 
@@ -345,30 +464,33 @@ fantaxtic::top_taxa(ps_birds_sub, n = 5, tax_level = "class")
 
 #### models ####
 
+# relevel so that "social" is the reference
+df_metadata_sub$basic_sociality <- relevel(factor(df_metadata_sub$basic_sociality), ref = "social")
+
 # models for each metric
 model_adiv_observed <- pglmm(
-  adiv_observed_otus ~ basic_sociality + (1|host_scientific_name) + (1|diet),
+  adiv_observed_otus ~ basic_sociality + basic_diet + (1|host_scientific_name),
   data = df_metadata_sub,
   family = "gaussian",
   cov_ranef = list(host_scientific_name = host_phylo)
 )
 
 model_adiv_chao1 <- pglmm(
-  adiv_chao1 ~ basic_sociality + (1|host_scientific_name)+ (1|diet),
+  log(adiv_chao1) ~ basic_sociality + basic_diet + (1|host_scientific_name),
   data = df_metadata_sub,
   family = "gaussian",
   cov_ranef = list(host_scientific_name = host_phylo)
 )
 
 model_adiv_shannon <- pglmm(
-  adiv_shannon ~ basic_sociality + (1|host_scientific_name)+ (1|diet),
+  log(adiv_shannon) ~ basic_sociality + basic_diet + (1|host_scientific_name) + (1|diet),
   data = df_metadata_sub,
   family = "gaussian",
   cov_ranef = list(host_scientific_name = host_phylo)
 )
 
 model_adiv_faith <- pglmm(
-  adiv_faith_pd ~ basic_sociality + (1|host_scientific_name)+ (1|diet),
+  log(adiv_faith_pd) ~ basic_sociality + basic_diet + (1|host_scientific_name) + (1|diet),
   data = df_metadata_sub,
   family = "gaussian",
   cov_ranef = list(host_scientific_name = host_phylo)
@@ -382,10 +504,10 @@ summary(model_adiv_faith)
 
 # check model assumptions
 
-# homoscedasticity
+# check homoscedasticity
 fitted_vals <- fitted(model_adiv_observed)
 
-# Residuals vs Fitted (check homoscedasticity)
+# residuals vs fitted
 plot(fitted_vals, residuals,
      xlab = "Fitted Values", ylab = "Residuals",
      main = "Residuals vs Fitted")
@@ -395,9 +517,9 @@ lines(lowess(fitted_vals, residuals), col = "blue", lwd = 2)
 
 # run log-transformed model
 
-# 2. Run log-transformed version
+# 2. run log-transformed version
 model_log <- pglmm(
-  log(adiv_observed_otus) ~ basic_sociality + (1|host_scientific_name) + (1|diet),
+  log(adiv_observed_otus) ~ basic_sociality + diet + (1|host_scientific_name),
   data = df_metadata_sub,
   family = "gaussian",
   cov_ranef = list(host_scientific_name = host_phylo)
