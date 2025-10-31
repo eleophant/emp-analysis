@@ -1086,7 +1086,7 @@ disp_data = disp_data %>%
 disp_data %>%
   ggplot(aes(x = host_scientific_name, y = distance, fill = sociality)) +
   geom_boxplot(width = 0.6) +
-  scale_fill_viridis_d(name = "Sociality") +
+  scale_fill_viridis_d(name = "Sociality", direction = -1) +
   scale_y_continuous(limits = c(0, 100), breaks = seq(0, 140, by = 20)) +
   geom_text(data = disp_data, aes(host_scientific_name, Inf, label = n), hjust = "inward") +
   labs(x = "Host species", y = "Distance from centroid") +
