@@ -783,209 +783,40 @@ anova(mod1_conditioned_birds, by = "margin", permutations = 999)
 # variance explained
 RsquareAdj(mod1_conditioned_birds)
 
-# _ TODO plot RDA ###
+# _ TODO plots ####
 # all hosts
-df_metadata_sub = df_metadata_sub %>% rownames_to_column() %>% rename("sample_id" = "rowname")
+#df_metadata_sub = df_metadata_sub %>% rownames_to_column() %>% rename("sample_id" = "rowname")
 
 # species
-rda_scores_sp_df = rda_sp_all %>% 
+rda_scores = mod1_conditioned %>% 
   scores(display = "sites") %>% # extract the site scores
   as.data.frame() %>% 
   rownames_to_column() %>% 
   mutate(sample_id = rowname) %>% #add a sample_id column
   left_join(df_metadata_sub, by = "sample_id")
 
-gg_ordiplot(rda_sp_all, groups = df_metadata_sub$host_species, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 4.35%, CAP2 1.39%
+gg_ordiplot(mod1_conditioned, groups = df_metadata_sub$basic_sociality, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 0.67%, CAP2 0.29%
 
-rda_scores_sp_df %>% 
-  ggplot(aes(x = CAP1, y = CAP2, colour = host_species, shape = host_class)) +
+rda_scores %>% 
+  ggplot(aes(x = CAP1, y = CAP2, colour = basic_sociality, shape = basic_diet)) +
   geom_point(size = 2) +
   geom_vline(xintercept = 0, linetype = "dotted") + 
   geom_hline(yintercept = 0, linetype = "dotted") +
   scale_colour_viridis_d() +
-  scale_shape_manual(values = c("c__Aves" = 16, "c__Mammalia" = 17), labels = c("Aves", "Mammalia")) +
   labs(
-    colour = "host species", 
-    shape = "host class",
-    x = "CAP1 (4.35%)", 
-    y = "CAP2 (1.39%)"
+    colour = "Sociality", 
+    shape = "Diet",
+    x = "CAP1 (0.67%)", 
+    y = "CAP2 (0.29%)"
   ) +
   theme(text = element_text(size = 14),
         legend.text = element_text(size = 14)) +
-  guides(colour = "none") +
   ggtitle("A")
 
-# diet
-rda_scores_diet_df = rda_diet_all %>% 
-  scores(display = "sites") %>% # extract the site scores
-  as.data.frame() %>% 
-  rownames_to_column() %>% 
-  mutate(sample_id = rowname) %>% #add a sample_id column
-  left_join(df_metadata_sub, by = "sample_id")
-
-gg_ordiplot(rda_diet_all, groups = df_metadata_sub$basic_diet, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 1.13%, CAP2 0.67%
-
-rda_scores_diet_df %>% 
-  ggplot(aes(x = CAP1, y = CAP2, colour = basic_diet, shape = host_class)) +
-  geom_point(size = 2) +
-  geom_vline(xintercept = 0, linetype = "dotted") + 
-  geom_hline(yintercept = 0, linetype = "dotted") +
-  scale_colour_viridis_d() +
-  scale_shape_manual(values = c("c__Aves" = 16, "c__Mammalia" = 17), labels = c("Aves", "Mammalia")) +
-  labs(
-    colour = "diet", 
-    shape = "host class",
-    x = "CAP1 (1.13%)", 
-    y = "CAP2 (0.67%)"
-  ) +
-  theme(text = element_text(size = 14),
-        legend.text = element_text(size = 14)) +
-  ggtitle("B")
-
-# sociality
-rda_scores_social_df = rda_social_all %>% 
-  scores(display = "sites") %>% # extract the site scores
-  as.data.frame() %>% 
-  rownames_to_column() %>% 
-  mutate(sample_id = rowname) %>% #add a sample_id column
-  left_join(df_metadata_sub, by = "sample_id")
-
-gg_ordiplot(rda_social_all, groups = df_metadata_sub$basic_sociality, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 1.66%, CAP2 0.52%
-
-rda_scores_social_df %>% 
-  ggplot(aes(x = CAP1, y = CAP2, colour = basic_sociality, shape = host_class)) +
-  geom_point(size = 2) +
-  geom_vline(xintercept = 0, linetype = "dotted") + 
-  geom_hline(yintercept = 0, linetype = "dotted") +
-  scale_colour_viridis_d() +
-  scale_shape_manual(values = c("c__Aves" = 16, "c__Mammalia" = 17), labels = c("Aves", "Mammalia")) +
-  labs(
-    colour = "sociality", 
-    shape = "order",
-    x = "CAP1 (1.66%)", 
-    y = "CAP2 (0.52%)"
-  ) +
-  theme(text = element_text(size = 14),
-        legend.text = element_text(size = 14)) +
-  ggtitle("C")
 
 # mammals
 
-# sociality
-rda_scores_social_mammals_df = rda_social_mammals %>% 
-  scores(display = "sites") %>% # extract the site scores
-  as.data.frame() %>% 
-  rownames_to_column() %>% 
-  mutate(sample_id = rowname) %>% #add a sample_id column
-  left_join(df_metadata_sub, by = "sample_id")
-
-gg_ordiplot(rda_social_mammals, groups = df_metadata_sub_mammals$basic_sociality, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 2.03%, CAP2 0.70%
-
-rda_scores_social_mammals_df %>% 
-  ggplot(aes(x = CAP1, y = CAP2, colour = basic_sociality)) +
-  geom_point() +
-  geom_vline(xintercept = 0, linetype = "dotted") + 
-  geom_hline(yintercept = 0, linetype = "dotted") +
-  scale_colour_viridis_d() +
-  labs(
-    colour = "sociality", 
-    x = "CAP1 (2.03%)", 
-    y = "CAP2 (0.70%)"
-  ) +
-  theme(
-    legend.text = element_text(size = 14), 
-    legend.title = element_text(size = 14),
-    axis.title = element_text(size = 14)
-  ) +
-  ggtitle("C (mammals)")
-
-# _ plot birds ----
-df_metadata_sub_birds = df_metadata_sub_birds %>% rownames_to_column() %>% rename("sample_id" = "rowname")
-
-# species
-rda_scores_sp_birds_df = rda_sp_birds %>% 
-  scores(display = "sites") %>% # extract the site scores
-  as.data.frame() %>% 
-  rownames_to_column() %>% 
-  mutate(sample_id = rowname) %>% #add a sample_id column
-  left_join(df_metadata_sub, by = "sample_id")
-
-gg_ordiplot(rda_sp_birds, groups = df_metadata_sub_birds$host_species, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 10.65%, CAP2 4.17%
-
-rda_scores_sp_birds_df %>% 
-  ggplot(aes(x = CAP1, y = CAP2, colour = host_scientific_name, shape = basic_diet)) +
-  geom_point(size = 2) +
-  geom_vline(xintercept = 0, linetype = "dotted") + 
-  geom_hline(yintercept = 0, linetype = "dotted") +
-  scale_colour_viridis_d() +
-  labs(
-    colour = "host species", 
-    shape = "diet",
-    x = "CAP1 (10.65%)", 
-    y = "CAP2 (4.17%)"
-  ) +
-  theme(
-    text = element_text(size = 14),
-    legend.text = element_text(face = "italic")) +
-  ggtitle("A (birds)")
-
-# diet
-rda_scores_diet_birds_df = rda_diet_birds %>% 
-  scores(display = "sites") %>% # extract the site scores
-  as.data.frame() %>% 
-  rownames_to_column() %>% 
-  mutate(sample_id = rowname) %>% # add a sample_id column
-  left_join(df_metadata_sub, by = "sample_id")
-
-gg_ordiplot(rda_diet_birds, groups = df_metadata_sub_birds$basic_diet, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 3.82% (no other axes)
-
-rda_scores_diet_birds_df %>% 
-  ggplot(aes(x = CAP1, y = MDS1, colour = basic_diet, shape = basic_sociality)) +
-  geom_point() +
-  geom_vline(xintercept = 0, linetype = "dotted") + 
-  geom_hline(yintercept = 0, linetype = "dotted") +
-  scale_colour_viridis_d() +
-  labs(
-    colour = "diet", 
-    shape = "sociality",
-    x = "CAP1 (1.28%)", 
-    y = "CAP2 (0.19%)"
-  ) +
-  theme(
-    legend.text = element_text(size = 14), 
-    legend.title = element_text(size = 14),
-    axis.title = element_text(size = 14)
-  ) +
-  ggtitle("B (birds)")
-
-# sociality
-rda_scores_social_birds_df = rda_social_birds %>% 
-  scores(display = "sites") %>% # extract the site scores
-  as.data.frame() %>% 
-  rownames_to_column() %>% 
-  mutate(sample_id = rowname) %>% #add a sample_id column
-  left_join(df_metadata_sub, by = "sample_id")
-
-gg_ordiplot(rda_social_birds, groups = df_metadata_sub_birds$basic_sociality, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 4.07%, CAP2 1.16%
-
-rda_scores_social_birds_df %>% 
-  ggplot(aes(x = CAP1, y = CAP2, colour = basic_sociality)) +
-  geom_point() +
-  geom_vline(xintercept = 0, linetype = "dotted") + 
-  geom_hline(yintercept = 0, linetype = "dotted") +
-  scale_colour_viridis_d() +
-  labs(
-    colour = "sociality", 
-    x = "CAP1 (4.07%)", 
-    y = "CAP2 (1.16%)"
-  ) +
-  theme(
-    legend.text = element_text(size = 14), 
-    legend.title = element_text(size = 14),
-    axis.title = element_text(size = 14)
-  ) +
-  ggtitle("C (birds)")
-
+# birds
 
 #### adonis ####
 mod1_adonis <- adonis2(
