@@ -563,6 +563,80 @@ p_combined_adiv = (p_adiv_obs | p_adiv_chao) / (p_adiv_shannon | p_adiv_faith)
 
 p_combined_adiv
 
+################ BETADISP ################
+
+# calculate distances
+dist_mat <- vegdist(df_otus_sub, method = "robust.aitchison")
+
+# generate dispersion per species
+disp_test_species <- betadisper(dist_mat, df_metadata_sub$host_species)
+anova(disp_test_species) # p < 0.001
+
+boxplot(disp_test_species, main = "Distance to centroid by social behaviour")
+
+# create df with betadisp metrics for each species + sociality level
+disp_data <- data.frame(
+  distance = disp_test_species$distances,
+  host_scientific_name = df_metadata_sub$host_scientific_name,
+  host_species = df_metadata_sub$host_species,
+  sociality = df_metadata_sub$basic_sociality
+)
+
+# filter to species with at least 5 samples
+disp_data_n = disp_data %>% 
+  group_by(host_scientific_name) %>% 
+  summarise(n = n())
+
+disp_data = disp_data %>% 
+  left_join(disp_data_n, by = "host_scientific_name") %>% 
+  filter(n > 4)
+
+disp_data %>% 
+  distinct(host_species) # 15 species, 308 observations
+
+# add PhyPC1:5 from metadata with n > 4
+df_metadata_phy = df_metadata_sub %>% 
+  select(host_species, host_scientific_name, host_genus, starts_with("Phy")) %>% 
+  distinct(host_scientific_name, .keep_all = TRUE) # keep all columns
+
+disp_data = disp_data %>%
+  left_join(df_metadata_phy, by = "host_scientific_name")
+
+# set reference level to 'social'
+disp_data$sociality <- factor(disp_data$sociality, levels = c("social", "intermediate", "solitary"))
+
+# test mean dispersion per species, weighted by sample size bc more samples = more reliable estimate
+species_disp <- disp_data %>%
+  group_by(host_scientific_name, sociality) %>%
+  summarise(mean_distance = mean(distance), n = n())
+
+lm_weighted <- lm(mean_distance ~ sociality, data = species_disp, weights = n)
+summary(lm_weighted)
+
+# check model assumptions
+plot(lm_weighted) # residuals vs fitted (homoscedasticity) and qq plot (normality of residuals) look good
+
+#### plot #####
+
+# ordering
+disp_data = disp_data %>% 
+  mutate(sociality = fct_relevel(sociality, c("solitary", "intermediate", "social"))) %>%
+  arrange(sociality, n) %>%  # reorder by sociality then sample size
+  mutate(host_scientific_name = factor(host_scientific_name, levels = unique(host_scientific_name)))
+
+# plot dispersion distances
+disp_data %>%
+  ggplot(aes(x = host_scientific_name, y = distance, fill = sociality)) +
+  geom_boxplot(width = 0.6) +
+  scale_fill_viridis_d(name = "Sociality", direction = -1) +
+  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 140, by = 20)) +
+  geom_text(data = disp_data, aes(host_scientific_name, Inf, label = n), hjust = "inward") +
+  labs(x = "Host species", y = "Distance from centroid") +
+  theme(text = element_text(size = 14),
+        axis.text.y = element_text(face = "italic")) +
+  guides(fill = guide_legend(reverse = TRUE)) +
+  coord_flip()
+
 ################ BETA DIVERSITY ################
 
 #### anosim ####
@@ -709,62 +783,8 @@ anova(mod1_conditioned_birds, by = "margin", permutations = 999)
 # variance explained
 RsquareAdj(mod1_conditioned_birds)
 
-
-#### adonis ####
-mod1_adonis <- adonis2(
-  dist_mat ~ basic_sociality + study_id + basic_diet + 
-    PhyPC1 + PhyPC2 + PhyPC3 + PhyPC4 + PhyPC5,
-  data = df_metadata_sub,
-  permutations = 999,
-  by = "margin"  # tests each term after all others
-)
-
-mod1_adonis
-
-#### betadisp ####
-
-# measures dispersion within each group and compared to dispersion between group
-# calculate distances
-dist_mat <- vegdist(df_otus_sub, method = "robust.aitchison")
-
-# test dispersion differences among sociality groups
-disp_test_social <- betadisper(dist_mat, df_metadata_sub$basic_sociality)
-anova(disp_test_social) # p < 0.001
-
-plot(disp_test_social)
-boxplot(disp_test_social, main = "Distance to centroid by social behaviour")
-
-cat("\nPairwise dispersion differences:\n")
-print(TukeyHSD(disp_test_social))
-
-# test dietary groups
-disp_test_diet <- betadisper(dist_mat, df_metadata_sub$basic_diet)
-anova(disp_test_diet) # p < 0.001
-
-plot(disp_test_diet)
-boxplot(disp_test_diet, main = "Distance to centroid by diet")
-# calculate distances
-dist_mat <- vegdist(df_otus_sub, method = "robust.aitchison")
-
-# test dispersion differences among sociality groups
-disp_test_social <- betadisper(dist_mat, df_metadata_sub$basic_sociality)
-anova(disp_test_social) # p < 0.001
-
-plot(disp_test_social)
-boxplot(disp_test_social, main = "Distance to centroid by social behaviour")
-
-cat("\nPairwise dispersion differences:\n")
-print(TukeyHSD(disp_test_social))
-
-# test dietary groups
-disp_test_diet <- betadisper(dist_mat, df_metadata_sub$basic_diet)
-anova(disp_test_diet) # p < 0.001
-
-plot(disp_test_diet)
-boxplot(disp_test_diet, main = "Distance to centroid by diet")
-
-
-# _ plot all hosts ----
+# _ TODO plot RDA ###
+# all hosts
 df_metadata_sub = df_metadata_sub %>% rownames_to_column() %>% rename("sample_id" = "rowname")
 
 # species
@@ -849,62 +869,7 @@ rda_scores_social_df %>%
         legend.text = element_text(size = 14)) +
   ggtitle("C")
 
-# _ plot mammals ----
-# species
-rda_scores_sp_mammals_df = rda_sp_mammals %>% 
-  scores(display = "sites") %>% # extract the site scores
-  as.data.frame() %>% 
-  rownames_to_column() %>% 
-  mutate(sample_id = rowname) %>% #add a sample_id column
-  left_join(df_metadata_sub, by = "sample_id")
-
-gg_ordiplot(rda_sp_mammals, groups = df_metadata_sub_mammals$host_species, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 4.52%, CAP2 1.57%
-
-rda_scores_sp_mammals_df %>% 
-  ggplot(aes(x = CAP1, y = CAP2, colour = host_species, shape = basic_diet)) +
-  geom_point(size = 2) +
-  geom_vline(xintercept = 0, linetype = "dotted") + 
-  geom_hline(yintercept = 0, linetype = "dotted") +
-  scale_colour_viridis_d() +
-  labs(
-    colour = "host species", 
-    shape = "diet",
-    x = "CAP1 (4.52%)", 
-    y = "CAP2 (1.57%)"
-  ) +
-  theme(
-    text = element_text(size = 14), 
-    legend.position = "none") +
-  ggtitle("A (mammals)")
-
-# diet
-rda_scores_diet_mammals_df = rda_diet_mammals %>% 
-  scores(display = "sites") %>% # extract the site scores
-  as.data.frame() %>% 
-  rownames_to_column() %>% 
-  mutate(sample_id = rowname) %>% #add a sample_id column
-  left_join(df_metadata_sub, by = "sample_id")
-
-gg_ordiplot(rda_diet_mammals, groups = df_metadata_sub_mammals$basic_diet, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 1.28%, CAP2 0.19%
-
-rda_scores_diet_mammals_df %>% 
-  ggplot(aes(x = CAP1, y = CAP2, colour = basic_diet, shape = basic_sociality)) +
-  geom_point() +
-  geom_vline(xintercept = 0, linetype = "dotted") + 
-  geom_hline(yintercept = 0, linetype = "dotted") +
-  scale_colour_viridis_d() +
-  labs(
-    colour = "diet", 
-    shape = "sociality",
-    x = "CAP1 (1.28%)", 
-    y = "CAP2 (0.19%)"
-  ) +
-  theme(
-    legend.text = element_text(size = 14), 
-    legend.title = element_text(size = 14),
-    axis.title = element_text(size = 14)
-  ) +
-  ggtitle("B (mammals)")
+# mammals
 
 # sociality
 rda_scores_social_mammals_df = rda_social_mammals %>% 
@@ -1021,79 +986,62 @@ rda_scores_social_birds_df %>%
   ) +
   ggtitle("C (birds)")
 
-################ BETADISP ################
 
+#### adonis ####
+mod1_adonis <- adonis2(
+  dist_mat ~ basic_sociality + study_id + basic_diet + 
+    PhyPC1 + PhyPC2 + PhyPC3 + PhyPC4 + PhyPC5,
+  data = df_metadata_sub,
+  permutations = 999,
+  by = "margin"  # tests each term after all others
+)
+
+mod1_adonis
+
+#### betadisp ####
+
+# measures dispersion within each group and compared to dispersion between group
 # calculate distances
 dist_mat <- vegdist(df_otus_sub, method = "robust.aitchison")
 
-# generate dispersion per species
-disp_test_species <- betadisper(dist_mat, df_metadata_sub$host_species)
-anova(disp_test_species) # p < 0.001
+# test dispersion differences among sociality groups
+disp_test_social <- betadisper(dist_mat, df_metadata_sub$basic_sociality)
+anova(disp_test_social) # p < 0.001
 
-boxplot(disp_test_species, main = "Distance to centroid by social behaviour")
+plot(disp_test_social)
+boxplot(disp_test_social, main = "Distance to centroid by social behaviour")
 
-# create df with betadisp metrics for each species + sociality level
-disp_data <- data.frame(
-  distance = disp_test_species$distances,
-  host_scientific_name = df_metadata_sub$host_scientific_name,
-  host_species = df_metadata_sub$host_species,
-  sociality = df_metadata_sub$basic_sociality
-)
+cat("\nPairwise dispersion differences:\n")
+print(TukeyHSD(disp_test_social))
 
-# filter to species with at least 5 samples
-disp_data_n = disp_data %>% 
-  group_by(host_scientific_name) %>% 
-  summarise(n = n())
+# test dietary groups
+disp_test_diet <- betadisper(dist_mat, df_metadata_sub$basic_diet)
+anova(disp_test_diet) # p < 0.001
 
-disp_data = disp_data %>% 
-  left_join(disp_data_n, by = "host_scientific_name") %>% 
-  filter(n > 4)
+plot(disp_test_diet)
+boxplot(disp_test_diet, main = "Distance to centroid by diet")
+# calculate distances
+dist_mat <- vegdist(df_otus_sub, method = "robust.aitchison")
 
-disp_data %>% 
-  distinct(host_species) # 15 species, 308 observations
+# test dispersion differences among sociality groups
+disp_test_social <- betadisper(dist_mat, df_metadata_sub$basic_sociality)
+anova(disp_test_social) # p < 0.001
 
-# add PhyPC1:5 from metadata with n > 4
-df_metadata_phy = df_metadata_sub %>% 
-  select(host_species, host_scientific_name, host_genus, starts_with("Phy")) %>% 
-  distinct(host_scientific_name, .keep_all = TRUE) # keep all columns
+plot(disp_test_social)
+boxplot(disp_test_social, main = "Distance to centroid by social behaviour")
 
-disp_data = disp_data %>%
-  left_join(df_metadata_phy, by = "host_scientific_name")
+cat("\nPairwise dispersion differences:\n")
+print(TukeyHSD(disp_test_social))
 
-# set reference level to 'social'
-disp_data$sociality <- factor(disp_data$sociality, levels = c("social", "intermediate", "solitary"))
+# test dietary groups
+disp_test_diet <- betadisper(dist_mat, df_metadata_sub$basic_diet)
+anova(disp_test_diet) # p < 0.001
 
-# test mean dispersion per species, weighted by sample size bc more samples = more reliable estimate
-species_disp <- disp_data %>%
-  group_by(host_scientific_name, sociality) %>%
-  summarise(mean_distance = mean(distance), n = n())
+plot(disp_test_diet)
+boxplot(disp_test_diet, main = "Distance to centroid by diet")
 
-lm_weighted <- lm(mean_distance ~ sociality, data = species_disp, weights = n)
-summary(lm_weighted)
 
-# check model assumptions
-plot(lm_weighted) # residuals vs fitted (homoscedasticity) and qq plot (normality of residuals) look good
 
-#### plot #####
-
-# ordering
-disp_data = disp_data %>% 
-  mutate(sociality = fct_relevel(sociality, c("solitary", "intermediate", "social"))) %>%
-  arrange(sociality, n) %>%  # reorder by sociality then sample size
-  mutate(host_scientific_name = factor(host_scientific_name, levels = unique(host_scientific_name)))
-
-# plot dispersion distances
-disp_data %>%
-  ggplot(aes(x = host_scientific_name, y = distance, fill = sociality)) +
-  geom_boxplot(width = 0.6) +
-  scale_fill_viridis_d(name = "Sociality", direction = -1) +
-  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 140, by = 20)) +
-  geom_text(data = disp_data, aes(host_scientific_name, Inf, label = n), hjust = "inward") +
-  labs(x = "Host species", y = "Distance from centroid") +
-  theme(text = element_text(size = 14),
-        axis.text.y = element_text(face = "italic")) +
-  guides(fill = guide_legend(reverse = TRUE)) +
-  coord_flip()
 
 ################ DIFFERENTIAL ABUNDANCE ################
 
