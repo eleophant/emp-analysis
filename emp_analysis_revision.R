@@ -23,6 +23,7 @@ library(ggordiplots)
 library(vegan)
 library(lme4)
 library(ALDEx2)
+library(ggsignif)
 theme_set(theme_classic())
 filter = dplyr::filter
 select = dplyr::select
@@ -464,163 +465,103 @@ fantaxtic::top_taxa(ps_birds_sub, n = 5, tax_level = "class")
 
 #### models ####
 
+# see emp_adiv_checks.R for model choice + assumptions checks
+
 # relevel so that "social" is the reference
 df_metadata_sub$basic_sociality <- relevel(factor(df_metadata_sub$basic_sociality), ref = "social")
 
 # models for each metric
-model_adiv_observed <- pglmm(
+mod_raw_obs_gaussian <- pglmm(
   adiv_observed_otus ~ basic_sociality + basic_diet + (1|host_scientific_name),
   data = df_metadata_sub,
   family = "gaussian",
   cov_ranef = list(host_scientific_name = host_phylo)
 )
 
-model_adiv_chao1 <- pglmm(
-  log(adiv_chao1) ~ basic_sociality + basic_diet + (1|host_scientific_name),
+mod_raw_chao <- pglmm(
+  adiv_chao1 ~ basic_sociality + basic_diet + (1|host_scientific_name),
+  data = df_metadata_sub,
+  family = "gaussian", # because this is continuous data
+  cov_ranef = list(host_scientific_name = host_phylo)
+)
+
+mod_raw_shannon <- pglmm(
+  adiv_shannon ~ basic_sociality + basic_diet + (1|host_scientific_name),
   data = df_metadata_sub,
   family = "gaussian",
   cov_ranef = list(host_scientific_name = host_phylo)
 )
 
-model_adiv_shannon <- pglmm(
-  log(adiv_shannon) ~ basic_sociality + basic_diet + (1|host_scientific_name) + (1|diet),
-  data = df_metadata_sub,
-  family = "gaussian",
-  cov_ranef = list(host_scientific_name = host_phylo)
-)
-
-model_adiv_faith <- pglmm(
-  log(adiv_faith_pd) ~ basic_sociality + basic_diet + (1|host_scientific_name) + (1|diet),
+mod_raw_faith <- pglmm(
+  adiv_faith_pd ~ basic_sociality + basic_diet + (1|host_scientific_name),
   data = df_metadata_sub,
   family = "gaussian",
   cov_ranef = list(host_scientific_name = host_phylo)
 )
 
 # inspect results
-summary(model_adiv_observed)
-summary(model_adiv_chao1)
-summary(model_adiv_shannon)
-summary(model_adiv_faith)
-
-
-# check log-transformed version
-model_log <- pglmm(
-  log(adiv_observed_otus) ~ basic_sociality + diet + (1|host_scientific_name),
-  data = df_metadata_sub,
-  family = "gaussian",
-  cov_ranef = list(host_scientific_name = host_phylo)
-) # results are qualitatively equivalent
+summary(mod_raw_obs_gaussian)
+summary(mod_raw_chao)
+summary(mod_raw_shannon)
+summary(model_raw_faith)
 
 #### plots ####
-
-#### _ host class ####
-comparisons_class = list(c("c__Aves", "c__Mammalia"))
-
-# obs OTUs
-class_obs = df_metadata_sub %>%
-  ggplot(aes(x = host_class, y = adiv_observed_otus, fill = host_class)) +
-  geom_boxplot() +
-  theme(legend.position = "none",
-        axis.title.y = element_text(size = 14), axis.text.y = element_text(size = 14),
-        axis.title.x = element_blank(), axis.text.x = element_blank()) +
-  #xlab("host class") +
-  ylab("observed OTUs") +
-  scale_x_discrete(labels=c("c__Aves" = "Aves", "c__Mammalia" = "Mammalia")) +
-  scale_fill_viridis_d() +
-  stat_compare_means(method = "wilcox.test", comparisons = comparisons_class, label = "p.signif")
-
-# chao1 
-class_chao = df_metadata_sub %>%
-  ggplot(aes(x = host_class, y = adiv_chao1, fill = host_class)) +
-  geom_boxplot() +
-  theme(legend.position = "none",
-        axis.title.y = element_text(size = 14), axis.text.y = element_text(size = 14),
-        axis.title.x = element_blank(), axis.text.x = element_blank()) +
-  #xlab("host class") +
-  ylab("Chao1 Index") +
-  scale_x_discrete(labels=c("c__Aves" = "Aves", "c__Mammalia" = "Mammalia")) +
-  scale_fill_viridis_d() +
-  stat_compare_means(method = "wilcox.test", comparisons = comparisons_class, label = "p.signif")
-
-# shannon 
-class_shannon = df_metadata_sub %>%
-  ggplot(aes(x = host_class, y = adiv_shannon, fill = host_class)) +
-  geom_boxplot() +
-  theme(legend.position = "none",
-        axis.title = element_text(size = 14), axis.text = element_text(size = 14)) +
-  xlab("host class") +
-  ylab("Shannon Index") +
-  scale_x_discrete(labels=c("c__Aves" = "Aves", "c__Mammalia" = "Mammalia")) +
-  scale_fill_viridis_d() +
-  stat_compare_means(method = "wilcox.test", comparisons = comparisons_class, label = "p.signif")
-
-# faith
-class_faith = df_metadata_sub %>%
-  ggplot(aes(x = host_class, y = adiv_faith_pd, fill = host_class)) +
-  geom_boxplot() +
-  theme(legend.position = "none",
-        axis.title = element_text(size = 14), axis.text = element_text(size = 14)) +
-  xlab("host class") +
-  ylab("Faith PD") +
-  scale_x_discrete(labels=c("c__Aves" = "Aves", "c__Mammalia" = "Mammalia")) +
-  scale_fill_viridis_d() +
-  stat_compare_means(method = "wilcox.test", comparisons = comparisons_class, label = "p.signif")
-
-# combine plots in the right order (Observed OTUs, Chao1, Shannon, Faith)
-combined_class_plot = (class_obs | class_chao) / (class_shannon | class_faith)
-combined_class_plot
-
-#### _ sociality ####
 sociality_order = c("solitary", "intermediate", "social")
 df_metadata_sub$basic_sociality = factor(df_metadata_sub$basic_sociality, levels = sociality_order)
 
-# obs
-soc_obs = df_metadata_sub %>%
-  ggplot(aes(x = basic_sociality, y = adiv_observed_otus, fill = basic_sociality)) +
-  #geom_violin() +
+p_adiv_obs = df_metadata_sub %>%
+  ggplot(aes(x = basic_sociality, 
+             y = adiv_observed_otus, 
+             fill = basic_sociality)) +
   geom_boxplot() +
   theme(legend.position = "none",
         axis.title.y = element_text(size = 14), axis.text.y = element_text(size = 14),
         axis.title.x = element_blank(), axis.text.x = element_blank()) +
-  xlab("host sociality") +
-  ylab("observed OTUs") +
+  xlab("Host sociality") +
+  ylab("Observed OTUs") +
   scale_fill_viridis_d()
 
-# chao1
-soc_chao = df_metadata_sub %>%
-  ggplot(aes(x = basic_sociality, y = adiv_chao1, fill = basic_sociality)) +
+p_adiv_chao = df_metadata_sub %>%
+  ggplot(aes(x = basic_sociality, 
+             y = adiv_chao1, 
+             fill = basic_sociality)) +
   geom_boxplot() +
   theme(legend.position = "none",
         axis.title.y = element_text(size = 14), axis.text.y = element_text(size = 14),
         axis.title.x = element_blank(), axis.text.x = element_blank()) +
-  xlab("host sociality") +
-  ylab("Chao1 Index") +
+  xlab("Host sociality") +
+  ylab("Chao1") +
   scale_fill_viridis_d()
 
-# shannon
-soc_shannon = df_metadata_sub %>%
-  ggplot(aes(x = basic_sociality, y = adiv_shannon, fill = basic_sociality)) +
+p_adiv_shannon = df_metadata_sub %>%
+  ggplot(aes(x = basic_sociality, 
+             y = adiv_shannon, 
+             fill = basic_sociality)) +
   geom_boxplot() +
   theme(legend.position = "none",
         axis.title = element_text(size = 14), axis.text = element_text(size = 14)) +
-  xlab("host sociality") +
-  ylab("Shannon Index") +
-  scale_fill_viridis_d()
+  xlab("Host sociality") +
+  ylab("Shannon") +
+  scale_fill_viridis_d() +
+  geom_signif(comparisons = list(c("social", "solitary")), 
+                                      map_signif_level=TRUE,
+              annotations="*")
 
-# faith
-soc_faith = df_metadata_sub %>%
-  ggplot(aes(x = basic_sociality, y = adiv_faith_pd, fill = basic_sociality)) +
-  #geom_violin() +
+p_adiv_faith = df_metadata_sub %>%
+  ggplot(aes(x = basic_sociality, 
+             y = adiv_faith_pd, 
+             fill = basic_sociality)) +
   geom_boxplot() +
   theme(legend.position = "none",
         axis.title = element_text(size = 14), axis.text = element_text(size = 14)) +
-  xlab("host sociality") +
+  xlab("Host sociality") +
   ylab("Faith PD") +
   scale_fill_viridis_d()
 
-# combine sociality plots
-combined_soc_plot = (soc_obs | soc_chao) / (soc_shannon | soc_faith)
-combined_soc_plot
+# combine plots
+p_combined_adiv = (p_adiv_obs | p_adiv_chao) / (p_adiv_shannon | p_adiv_faith)
+
+p_combined_adiv
 
 ################ BETA DIVERSITY ################
 
