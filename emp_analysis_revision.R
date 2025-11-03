@@ -28,6 +28,7 @@ theme_set(theme_classic())
 filter = dplyr::filter
 select = dplyr::select
 conflicts_prefer(dplyr::slice)
+conflicts_prefer(vegan::scores)
 
 ################ DATA INPUT ################
 
@@ -52,6 +53,9 @@ df_metadata_sub = df_metadata %>%
   slice_sample(n = 41)  %>%
   ungroup() %>% 
   column_to_rownames("rowname")
+
+# relevel so that "social" is the reference
+df_metadata_sub$basic_sociality <- relevel(factor(df_metadata_sub$basic_sociality), ref = "social")
 
 # subsample otu table
 common_samples_sub = intersect(rownames(mx_otus), rownames(df_metadata_sub))
@@ -138,8 +142,7 @@ cat("Fold difference:", max(sequencing_depth) / min(sequencing_depth), "\n")
 # create dataframe with depth
 depth_data = data.frame(
   sample_id = rownames(df_otus_sub),
-  depth = rowSums(df_otus_sub)
-) %>%
+  depth = rowSums(df_otus_sub)) %>%
   left_join(
     df_metadata_sub %>% 
       select(sample_id, host_scientific_name, basic_sociality, study_id),
@@ -152,7 +155,7 @@ ggplot(depth_data, aes(x = depth)) +
   geom_vline(xintercept = median(depth_data$depth), 
              color = "red", linetype = "dashed", size = 1) +
   labs(
-    title = "Distribution of Sequencing Depth",
+    title = "Distribution of sequencing depth",
     subtitle = paste("Median =", round(median(depth_data$depth)), "reads"),
     x = "Sequencing depth (total reads)",
     y = "Number of samples"
@@ -161,11 +164,11 @@ ggplot(depth_data, aes(x = depth)) +
 # looks highly skewed (long tail)
 
 # log scale version
-ggplot(depth_data, aes(x = depth)) +
+ggplot(depth_data, aes(x = log(depth))) +
   geom_histogram(bins = 50, fill = "skyblue2", color = "black") +
   scale_x_log10() +
   labs(
-    title = "Distribution of Sequencing Depth (Log Scale)",
+    title = "Distribution of sequencing depth (log scale)",
     x = "Sequencing depth (log10)",
     y = "Number of samples"
   ) +
@@ -176,45 +179,78 @@ ggplot(depth_data, aes(x = depth)) +
 # check if depth correlates with alpha diversity
 depth_alpha <- data.frame(
   depth = sequencing_depth,
-  adiv_observed_otus = df_metadata_sub$adiv_observed_otus,
+  adiv_obs_otus = df_metadata_sub$adiv_observed_otus,
   adiv_chao1 = df_metadata_sub$adiv_chao1,
   adiv_shannon = df_metadata_sub$adiv_shannon,
   adiv_faith_pd = df_metadata_sub$adiv_faith_pd,
   sociality = df_metadata_sub$basic_sociality
 )
 
-# correlation test
-cor_test_obs_otus <- cor.test(depth_alpha$depth, depth_alpha$adiv_observed_otus, method = "spearman")
-
+# correlation tests
+cor_test_obs_otus <- cor.test(depth_alpha$depth, depth_alpha$adiv_obs_otus, method = "spearman")
 cor_test_chao1 <- cor.test(depth_alpha$depth, depth_alpha$adiv_chao1, method = "spearman")
-
 cor_test_shannon <- cor.test(depth_alpha$depth, depth_alpha$adiv_shannon, method = "spearman")
-
 cor_test_faith_pd <- cor.test(depth_alpha$depth, depth_alpha$adiv_faith_pd, method = "spearman")
 
 cat("Spearman correlations between depth and alpha diversity:\n")
 
-print(cor_test_obs_otus) # rho = 0.02309349, p = 0.6558
-print(cor_test_chao1) # rho = 0.01962841, p = 0.7048
-print(cor_test_shannon) # rho = 0.005850495, p = 0.9101
-print(cor_test_obs_otus) # rho = 0.02309349, p = 0.6558
+print(cor_test_obs_otus) # rho = 0.03908144, p = 0.4505
+print(cor_test_chao1) # rho = 0.07753251, p = 0.134
+print(cor_test_shannon) # rho = 0.02837319, p = 0.5837
+print(cor_test_obs_otus) # rho = 0.03908144, p = 0.4505
 
 
 # plot
-ggplot(depth_alpha, aes(x = depth, y = alpha_div, color = sociality)) +
+plot_depth_adiv_obs = ggplot(depth_alpha, aes(x = depth, y = adiv_obs_otus)) +
   geom_point(alpha = 0.6) +
   geom_smooth(method = "lm", se = TRUE) +
   scale_x_log10() +
   labs(
-    title = "Alpha diversity vs Sequencing Depth",
-    subtitle = paste("Spearman ρ =", round(cor_test$estimate, 3), 
-                     ", p =", format.pval(cor_test$p.value, digits = 3)),
-    x = "Sequencing depth (log10)",
-    y = "Observed OTUs",
-    color = "Sociality"
-  ) +
-  theme_minimal()
+    #title = "Alpha diversity vs sequencing depth",
+    subtitle = paste("Spearman ρ =", round(cor_test_obs_otus$estimate, 3), 
+                     ", p =", format.pval(cor_test_obs_otus$p.value, digits = 3)),
+    x = "Sequencing depth",
+    y = "Observed OTUs" ) +
+  theme_classic()
 
+plot_depth_adiv_chao = ggplot(depth_alpha, aes(x = depth, y = adiv_chao1)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE) +
+  scale_x_log10() +
+  labs(
+    #title = "Alpha diversity vs sequencing depth",
+    subtitle = paste("Spearman ρ =", round(cor_test_chao1$estimate, 3), 
+                     ", p =", format.pval(cor_test_chao1$p.value, digits = 3)),
+    x = "Sequencing depth",
+    y = "Chao1" ) +
+  theme_classic()
+
+plot_depth_adiv_shannon = ggplot(depth_alpha, aes(x = depth, y = adiv_shannon)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE) +
+  scale_x_log10() +
+  labs(
+    #title = "Alpha diversity vs sequencing depth",
+    subtitle = paste("Spearman ρ =", round(cor_test_shannon$estimate, 3), 
+                     ", p =", format.pval(cor_test_shannon$p.value, digits = 3)),
+    x = "Sequencing depth",
+    y = "Shannon" ) +
+  theme_classic()
+
+plot_depth_adiv_faith = ggplot(depth_alpha, aes(x = depth, y = adiv_faith_pd)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE) +
+  scale_x_log10() +
+  labs(
+    #title = "Alpha diversity vs sequencing depth",
+    subtitle = paste("Spearman ρ =", round(cor_test_faith_pd$estimate, 3), 
+                     ", p =", format.pval(cor_test_faith_pd$p.value, digits = 3)),
+    x = "Sequencing depth",
+    y = "Faith PD" ) +
+  theme_classic()
+
+# combine plots
+(plot_depth_adiv_obs + plot_depth_adiv_chao) / (plot_depth_adiv_shannon + plot_depth_adiv_faith)
 
 #### sociality ####
 ggplot(depth_data, aes(x = basic_sociality, y = depth, fill = basic_sociality)) +
@@ -467,9 +503,6 @@ fantaxtic::top_taxa(ps_birds_sub, n = 5, tax_level = "class")
 
 # see emp_adiv_checks.R for model choice + assumptions checks
 
-# relevel so that "social" is the reference
-df_metadata_sub$basic_sociality <- relevel(factor(df_metadata_sub$basic_sociality), ref = "social")
-
 # models for each metric
 mod_raw_obs_gaussian <- pglmm(
   adiv_observed_otus ~ basic_sociality + basic_diet + (1|host_scientific_name),
@@ -563,7 +596,7 @@ p_combined_adiv = (p_adiv_obs | p_adiv_chao) / (p_adiv_shannon | p_adiv_faith)
 
 p_combined_adiv
 
-################ BETADISP ################
+################ SP. BETADISP ################
 
 # calculate distances
 dist_mat <- vegdist(df_otus_sub, method = "robust.aitchison")
@@ -743,7 +776,7 @@ RsquareAdj(mod1_conditioned)
 
 #### _ mammals ####
 
-# add phylogenetic PCoA to metadata
+# add phylogenetic PCoA to metadata if not already done
 df_metadata_sub_mammals = df_metadata_sub_mammals %>%
   inner_join(phylo_coords, by = "host_species")
 
@@ -766,7 +799,7 @@ RsquareAdj(mod1_conditioned_mammals)
 
 # add phylogenetic PCoA to metadata
 df_metadata_sub_birds = df_metadata_sub_birds %>%
-  inner_join(phylo_coords2, by = "host_species")
+  inner_join(phylo_coords, by = "host_species")
 
 # model with study_id + diet + 5 phylogenetic axes as conditioned terms
 mod1_conditioned_birds <- capscale(
@@ -783,21 +816,18 @@ anova(mod1_conditioned_birds, by = "margin", permutations = 999)
 # variance explained
 RsquareAdj(mod1_conditioned_birds)
 
-# _ TODO plots ####
+# _ plots ####
 # all hosts
-#df_metadata_sub = df_metadata_sub %>% rownames_to_column() %>% rename("sample_id" = "rowname")
-
-# species
 rda_scores = mod1_conditioned %>% 
   scores(display = "sites") %>% # extract the site scores
   as.data.frame() %>% 
   rownames_to_column() %>% 
-  mutate(sample_id = rowname) %>% #add a sample_id column
+  mutate(sample_id = rowname) %>% # add a sample_id column
   left_join(df_metadata_sub, by = "sample_id")
 
 gg_ordiplot(mod1_conditioned, groups = df_metadata_sub$basic_sociality, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 0.67%, CAP2 0.29%
 
-rda_scores %>% 
+plot_rda_all = rda_scores %>% 
   ggplot(aes(x = CAP1, y = CAP2, colour = basic_sociality, shape = basic_diet)) +
   geom_point(size = 2) +
   geom_vline(xintercept = 0, linetype = "dotted") + 
@@ -809,14 +839,65 @@ rda_scores %>%
     x = "CAP1 (0.67%)", 
     y = "CAP2 (0.29%)"
   ) +
-  theme(text = element_text(size = 14),
-        legend.text = element_text(size = 14)) +
-  ggtitle("A")
+  ggtitle("A") +
+  theme_classic(base_size = 14)
 
+plot_rda_all
 
 # mammals
+rda_scores_mammals = mod1_conditioned_mammals %>% 
+  scores(display = "sites") %>% # extract the site scores
+  as.data.frame() %>% 
+  rownames_to_column() %>% 
+  mutate(sample_id = rowname) %>% # add a sample_id column
+  left_join(df_metadata_sub, by = "sample_id")
+
+gg_ordiplot(mod1_conditioned_mammals, groups = df_metadata_sub_mammals$basic_sociality, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 0.78%, CAP2 0.44%
+
+plot_rda_mammals = rda_scores_mammals %>% 
+  ggplot(aes(x = CAP1, y = CAP2, colour = basic_sociality, shape = basic_diet)) +
+  geom_point(size = 2) +
+  geom_vline(xintercept = 0, linetype = "dotted") + 
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  scale_colour_viridis_d() +
+  labs(
+    colour = "Sociality", 
+    shape = "Diet",
+    x = "CAP1 (0.78%)", 
+    y = "CAP2 (0.44%)"
+  ) +
+  theme(text = element_text(size = 10),
+        legend.text = element_text(size = 10)) +
+  ggtitle("Mammals")
 
 # birds
+rda_scores_birds = mod1_conditioned_birds %>% 
+  scores(display = "sites") %>% # extract the site scores
+  as.data.frame() %>% 
+  rownames_to_column() %>% 
+  mutate(sample_id = rowname) %>% # add a sample_id column
+  left_join(df_metadata_sub, by = "sample_id")
+
+gg_ordiplot(mod1_conditioned_birds, groups = df_metadata_sub_birds$basic_sociality, hull = FALSE, label = FALSE, spiders = TRUE, ellipse = FALSE, pt.size = 2, plot = TRUE) #CAP1 1.45%, CAP2 1.12%
+
+plot_rda_birds = rda_scores_birds %>% 
+  ggplot(aes(x = CAP1, y = CAP2, colour = basic_sociality, shape = basic_diet)) +
+  geom_point(size = 2) +
+  geom_vline(xintercept = 0, linetype = "dotted") + 
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  scale_colour_viridis_d() +
+  labs(
+    colour = "Sociality", 
+    shape = "Diet",
+    x = "CAP1 (1.45%)", 
+    y = "CAP2 (1.12%)"
+  ) +
+  theme(text = element_text(size = 10),
+        legend.text = element_text(size = 10)) +
+  ggtitle("Birds")
+
+# combine plots for SI
+plot_rda_mammals + plot_rda_birds
 
 #### adonis ####
 mod1_adonis <- adonis2(
@@ -839,11 +920,37 @@ dist_mat <- vegdist(df_otus_sub, method = "robust.aitchison")
 disp_test_social <- betadisper(dist_mat, df_metadata_sub$basic_sociality)
 anova(disp_test_social) # p < 0.001
 
+cat("\nPairwise dispersion differences:\n")
+print(TukeyHSD(disp_test_social))
+
 plot(disp_test_social)
 boxplot(disp_test_social, main = "Distance to centroid by social behaviour")
 
-cat("\nPairwise dispersion differences:\n")
-print(TukeyHSD(disp_test_social))
+# plot dispersion distances
+# create df with betadisp metrics for each sociality level
+disp_soc_data <- data.frame(
+  distance = disp_test_social$distances,
+  sociality = df_metadata_sub$basic_sociality)
+
+# set reference level to 'social'
+disp_soc_data$sociality <- factor(disp_soc_data$sociality, levels = c("social", "intermediate", "solitary"))
+
+# boxplot dispersion distances
+plot_disp_soc_boxplot = disp_soc_data %>%
+  ggplot(aes(x = sociality, y = distance, fill = sociality)) +
+  geom_boxplot(width = 0.6) +
+  scale_fill_viridis_d(name = "Sociality", direction = -1) +
+  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 140, by = 20)) +
+  labs(x = "Sociality", y = "Distance from centroid") +
+  guides(fill = guide_legend(reverse = TRUE)) +
+  geom_signif(comparisons = list(c("social", "solitary"), c("intermediate", "solitary")), 
+              map_signif_level = TRUE,
+              annotations = "***",
+              y_position = c(80, 92)) +
+  theme_classic(base_size = 14) +
+  ggtitle("C")
+
+plot_disp_soc_boxplot
 
 # test dietary groups
 disp_test_diet <- betadisper(dist_mat, df_metadata_sub$basic_diet)
@@ -851,28 +958,94 @@ anova(disp_test_diet) # p < 0.001
 
 plot(disp_test_diet)
 boxplot(disp_test_diet, main = "Distance to centroid by diet")
-# calculate distances
-dist_mat <- vegdist(df_otus_sub, method = "robust.aitchison")
 
-# test dispersion differences among sociality groups
-disp_test_social <- betadisper(dist_mat, df_metadata_sub$basic_sociality)
-anova(disp_test_social) # p < 0.001
+# extract data for scatterplot
+# PCoA coordinates
+pcoa_coords_betadisp <- as.data.frame(disp_test_social$vectors[, 1:2])
+colnames(pcoa_coords_betadisp) <- c("PCoA1", "PCoA2")
 
-plot(disp_test_social)
-boxplot(disp_test_social, main = "Distance to centroid by social behaviour")
+# centroids
+centroids <- as.data.frame(disp_test_social$centroids[, 1:2])
+colnames(centroids) <- c("PCoA1", "PCoA2")
+centroids$group <- rownames(centroids)
 
-cat("\nPairwise dispersion differences:\n")
-print(TukeyHSD(disp_test_social))
+# sample data
+sample_data_betadisp <- pcoa_coords_betadisp %>%
+  mutate(
+    group = df_metadata_sub$basic_sociality,
+    distance_to_centroid = disp_test_social$distances
+  )
 
-# test dietary groups
-disp_test_diet <- betadisper(dist_mat, df_metadata_sub$basic_diet)
-anova(disp_test_diet) # p < 0.001
+# join centroids for drawing lines
+sample_data_betadisp <- sample_data_betadisp %>%
+  left_join(
+    centroids %>% rename(centroid_PCoA1 = PCoA1, centroid_PCoA2 = PCoA2),
+    by = "group"
+  )
 
-plot(disp_test_diet)
-boxplot(disp_test_diet, main = "Distance to centroid by diet")
+sample_data_betadisp$group = relevel(factor(sample_data_betadisp$group), ref = "social")
 
+# plot
+plot_disp_sociality <- ggplot() +
+  # lines from samples to centroids
+  geom_segment(
+    data = sample_data_betadisp,
+    aes(x = PCoA1, y = PCoA2, 
+        xend = centroid_PCoA1, yend = centroid_PCoA2,
+        color = group),
+    alpha = 0.3,
+    linewidth = 0.5
+  ) +
+  # sample points
+  geom_point(
+    data = sample_data_betadisp,
+    aes(x = PCoA1, y = PCoA2, color = group, fill = group),
+    size = 2,
+    shape = 21,
+    stroke = 0.5,
+    alpha = 0.7
+  ) +
+  # centroid points
+  geom_point(
+    data = centroids,
+    aes(x = PCoA1, y = PCoA2, fill = group),
+    size = 3,
+    shape = 23,  # diamond
+    color = "black",
+    stroke = 1
+  ) +
+  # colour scale
+  scale_color_manual(
+    name = "Sociality",
+    values = c(
+      "social" = "#440154FF",      # viridis purple
+      "intermediate" = "#21908CFF",  # viridis teal
+      "solitary" = "#FDE725FF"      # viridis yellow
+    )
+  ) +
+  scale_fill_manual(
+    name = "Sociality",
+    values = c(
+      "social" = "#440154FF",
+      "intermediate" = "#21908CFF",
+      "solitary" = "#FDE725FF"
+    )
+  ) +
+  # labels
+  labs(
+    x = "PCoA1",
+    y = "PCoA2",
+    title = "B") +
+  # theme
+  theme_classic(base_size = 14)
 
+plot_disp_sociality
 
+#### fig 4 plots ####
+plot_rda_all = plot_rda_all + theme(legend.position = "none")
+plot_disp_sociality = plot_disp_sociality + theme(legend.position = "none")
+plot_rda_all + plot_disp_sociality # A + B
+plot_disp_soc # C
 
 ################ DIFFERENTIAL ABUNDANCE ################
 
