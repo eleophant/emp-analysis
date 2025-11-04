@@ -930,32 +930,6 @@ print(TukeyHSD(disp_test_social))
 plot(disp_test_social)
 boxplot(disp_test_social, main = "Distance to centroid by social behaviour")
 
-# plot dispersion distances
-# create df with betadisp metrics for each sociality level
-disp_soc_data <- data.frame(
-  distance = disp_test_social$distances,
-  sociality = df_metadata_sub$basic_sociality)
-
-# set reference level to 'social'
-disp_soc_data$sociality <- factor(disp_soc_data$sociality, levels = c("social", "intermediate", "solitary"))
-
-# boxplot dispersion distances
-plot_disp_soc_boxplot = disp_soc_data %>%
-  ggplot(aes(x = sociality, y = distance, fill = sociality)) +
-  geom_boxplot(width = 0.6) +
-  scale_fill_viridis_d(name = "Sociality", direction = -1) +
-  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 140, by = 20)) +
-  labs(x = "Sociality", y = "Distance from centroid") +
-  guides(fill = guide_legend(reverse = TRUE)) +
-  geom_signif(comparisons = list(c("social", "solitary"), c("intermediate", "solitary")), 
-              map_signif_level = TRUE,
-              annotations = "***",
-              y_position = c(80, 92)) +
-  theme_classic(base_size = 14) +
-  ggtitle("C")
-
-plot_disp_soc_boxplot
-
 # test dietary groups
 disp_test_diet <- betadisper(dist_mat, df_metadata_sub$basic_diet)
 anova(disp_test_diet) # p < 0.001
@@ -963,8 +937,8 @@ anova(disp_test_diet) # p < 0.001
 plot(disp_test_diet)
 boxplot(disp_test_diet, main = "Distance to centroid by diet")
 
-# extract data for scatterplot
-# PCoA coordinates
+# Fig 4B - dispersion scatterplot
+# extract data for scatterplot from PCoA coordinates
 pcoa_coords_betadisp <- as.data.frame(disp_test_social$vectors[, 1:2])
 colnames(pcoa_coords_betadisp) <- c("PCoA1", "PCoA2")
 
@@ -1045,9 +1019,36 @@ plot_disp_sociality <- ggplot() +
 
 plot_disp_sociality
 
+# Fig 4C - dispersion boxplot
+# plot dispersion distances
+# create df with betadisp metrics for each sociality level
+disp_soc_data <- data.frame(
+  distance = disp_test_social$distances,
+  sociality = df_metadata_sub$basic_sociality)
+
+# set reference level to 'social'
+disp_soc_data$sociality <- factor(disp_soc_data$sociality, levels = c("social", "intermediate", "solitary"))
+
+# boxplot dispersion distances
+plot_disp_soc_boxplot = disp_soc_data %>%
+  ggplot(aes(x = sociality, y = distance, fill = sociality)) +
+  geom_boxplot(width = 0.6) +
+  scale_fill_viridis_d(name = "Sociality") +
+  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 140, by = 20)) +
+  labs(x = "Sociality", y = "Distance from centroid") +
+  geom_signif(comparisons = list(c("social", "solitary"), c("intermediate", "solitary")), 
+              map_signif_level = TRUE,
+              annotations = "***",
+              y_position = c(80, 92)) +
+  theme_classic(base_size = 14) +
+  ggtitle("C")
+
+plot_disp_soc_boxplot
+
 #### fig 4 plots ####
 plot_rda_all = plot_rda_all + theme(legend.position = "none")
 plot_disp_sociality = plot_disp_sociality + theme(legend.position = "none")
+plot_disp_soc_boxplot + theme(legend.position = "none")
 plot_rda_all + plot_disp_sociality # A + B
 plot_disp_soc # C
 
@@ -1106,17 +1107,17 @@ bifido_prevalence_data <- bifido_analysis %>%
 cat("\n=== Prevalence by Group ===\n")
 print(prevalence_data)
 
-# log-transform for normality
-bifido_analysis$log_bifido <- log(bifido_analysis$bifido_rel_abundance + 1e-6)
+# create binary variable for presence/absence
+bifido_analysis$presence <- ifelse(bifido_analysis$bifido_rel_abundance > 0, 1, 0)
 
-mod_occurrence_bifido <- pglmm(
-  log_bifido ~ sociality + (1|host_species),
+mod_prevalence_bifido <- pglmm(
+  presence ~ sociality + (1|host_species),
   data = bifido_analysis,
-  family = "gaussian",
+  family = "binomial",
   cov_ranef = list(host_species = host_phylo)
 )
 
-print(summary(mod_occurrence_bifido))
+summary(mod_prevalence_bifido)
 
 #### _ rel ab ####
 # 2) is there a difference in within-sample relative abundance of Bifido & Lacto by sociality level?
@@ -1138,7 +1139,7 @@ bifido_rel_data <- data.frame(
 bifido_rel_data$log_rel_abund <- log(bifido_rel_data$bifido_rel_abundance + 0.01)
 
 # run PGLMM
-mod_rel_abund <- pglmm(
+mod_rel_ab_bifido <- pglmm(
   log_rel_abund ~ sociality + (1|host_species),
   data = bifido_rel_data,
   family = "gaussian",
@@ -1146,7 +1147,7 @@ mod_rel_abund <- pglmm(
 )
 
 cat("\n=== PGLMM on relative abundance of Bifidobacterium OTUs ===\n")
-print(summary(mod_rel_abund))
+summary(mod_rel_ab_bifido)
 
 
 #### limosilactobacillus ####
@@ -1200,17 +1201,17 @@ lacto_prevalence_data <- lacto_analysis %>%
 cat("\n=== Prevalence by Group ===\n")
 print(prevalence_data)
 
-# log-transform for normality
-lacto_analysis$log_lacto <- log(lacto_analysis$lacto_rel_abundance + 1e-6)
+# create binary variable for presence/absence
+lacto_analysis$presence <- ifelse(lacto_analysis$lacto_rel_abundance > 0, 1, 0)
 
-mod_occurrence_lacto <- pglmm(
-  log_lacto ~ sociality + (1|host_species),
+mod_prevalence_lacto <- pglmm(
+  presence ~ sociality + (1|host_species),
   data = lacto_analysis,
-  family = "gaussian",
+  family = "binomial",
   cov_ranef = list(host_species = host_phylo)
 )
 
-print(summary(mod_occurrence_lacto))
+summary(mod_prevalence_lacto)
 
 #### _ rel ab ####
 
@@ -1231,7 +1232,7 @@ lacto_rel_data <- data.frame(
 lacto_rel_data$log_rel_abund <- log(lacto_rel_data$lacto_rel_abundance + 0.01)
 
 # run PGLMM
-mod_rel_abund <- pglmm(
+mod_rel_ab_lacto <- pglmm(
   log_rel_abund ~ sociality + (1|host_species),
   data = lacto_rel_data,
   family = "gaussian",
@@ -1239,7 +1240,7 @@ mod_rel_abund <- pglmm(
 )
 
 cat("\n=== PGLMM on relative abundance of lactobacterium OTUs ===\n")
-print(summary(mod_rel_abund))
+print(summary(mod_rel_ab_lacto))
 
 #### plots ####
 
