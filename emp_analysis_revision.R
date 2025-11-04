@@ -355,7 +355,7 @@ otus_per_sample_birds = df_metadata_sub_birds %>%
 otus_per_sample_birds %>% summarise(mean(total_otus), median(total_otus), max(total_otus), min(total_otus))
 # mean 807, median 695, max 2817, min 114
 
-#### compare classes ####
+# compare classes
 wilcox.test(total_otus ~ host_class, data = otus_per_sample) # W = 6841, p-value = 0.0001415
 
 #### social OTUs ####
@@ -381,7 +381,7 @@ df_tax %>% filter(genus == "D_5__Lactobacillus") %>%
   summarise(n = n()) # 226 Limosilactobacillus species
 
 # make list of Limosilactobacillus OTUs
-ls_limosi = df_tax %>%
+ls_lacto = df_tax %>%
   filter(genus == "D_5__Lactobacillus") %>% 
   pull(rowname)
 
@@ -398,19 +398,19 @@ df_otus_sub %>%
 
 # Limosilact OTUs
 df_otus_sub %>% 
-  select(all_of(ls_limosi)) %>% # all Limosilact OTUs
+  select(all_of(ls_lacto)) %>% # all Limosilact OTUs
   summarise(across(everything(), ~ sum(., na.rm = TRUE))) %>% 
   sum() # 59335
 # Limosilact: 59335/13085267*100 = 0.4534489 % of sequences
 
 #### relative abundances ####  
-####_ all hosts #### 
+# all hosts
 # normalize number of reads using median sequencing depth
 total = median(sample_sums(ps_sub))
 standf = function(x, t = total) round(t * (x / sum(x)))
 ps_norm = transform_sample_counts(ps_sub, standf)
 
-####  _ mammals #### 
+# mammals
 total_mammals = median(sample_sums(ps_mammals_sub))
 standf = function(x, t = total_mammals) round(t * (x / sum(x)))
 ps_norm_mammals = transform_sample_counts(ps_mammals_sub, standf)
@@ -419,18 +419,21 @@ ps_norm_mammals = transform_sample_counts(ps_mammals_sub, standf)
 # NB: to run on server only
 load("plot_relab_mammals.RData")
 
-plot_relab_mammals = relab_mammals_plot = ggplot(relab_mammals_df, aes(x = Sample, y = Abundance, fill = phylum)) +
+relab_mammals_df = relab_mammals_df %>% 
+  rename(Phylum = phylum)
+
+plot_relab_mammals = ggplot(relab_mammals_df, aes(x = Sample, y = Abundance, fill = Phylum)) +
   geom_bar(stat = "identity", position = "stack") +
   xlab("sample") +
   ylab("relative abundance") +
   theme(axis.text.x = element_blank(),
         text = element_text(size = 14)) +
-  scale_fill_viridis_d(labels = c("Actinobacteria", "Bacteroidetes", "Cyanobacteria", "Euryarchaeota", "Firmicutes", "Lentisphaerae", "Proteobacteria", "Spirochaetae",  "Tenericutes", "Verrucomicrobia", "Other")) +
+  scale_fill_discrete(labels = c("Actinobacteria", "Bacteroidetes", "Cyanobacteria", "Euryarchaeota", "Firmicutes", "Lentisphaerae", "Proteobacteria", "Spirochaetae",  "Tenericutes", "Verrucomicrobia", "Other")) +
   ggtitle("A (mammals)")
 
 plot_relab_mammals
 
-#### _ birds #### 
+# birds
 total_birds = median(sample_sums(ps_birds_sub))
 standf = function(x, t = total_birds) round(t * (x / sum(x)))
 ps_norm_birds = transform_sample_counts(ps_birds_sub, standf)
@@ -458,17 +461,18 @@ relab_birds_df = relab_birds_df %>%
 relab_birds_df = relab_birds_df %>%
   group_by(Sample, phylum) %>%
   summarize(Abundance = sum(Abundance), .groups = "drop") %>%
-  mutate(RelativeAbundance = Abundance / sum(Abundance))
+  mutate(RelativeAbundance = Abundance / sum(Abundance)) %>% 
+  rename(Phylum = phylum)
 
 # relative abundances plot - birds
 # can run on local machine
-plot_relab_birds = ggplot(relab_birds_df, aes(x = Sample, y = Abundance, fill = phylum)) +
+plot_relab_birds = ggplot(relab_birds_df, aes(x = Sample, y = Abundance, fill = Phylum)) +
   geom_bar(stat = "identity", position = "stack") +
-  xlab("sample") +
-  ylab("relative abundance") +
+  xlab("Sample") +
+  ylab("Relative abundance") +
   theme(axis.text.x = element_blank(),
         text = element_text(size = 14)) +
-  scale_fill_viridis_d(labels = c("Actinobacteria", "Bacteroidetes", "Cyanobacteria", "Firmicutes", "Lentisphaerae", "Planctomycetes", "Proteobacteria", "Spirochaetae", "Tenericutes", "Verrucomicrobia", "Other")) +
+  scale_fill_discrete(labels = c("Actinobacteria", "Bacteroidetes", "Cyanobacteria", "Firmicutes", "Lentisphaerae", "Planctomycetes", "Proteobacteria", "Spirochaetae", "Tenericutes", "Verrucomicrobia", "Other")) +
   ggtitle("B (birds)")
 
 plot_relab_birds
@@ -1047,130 +1051,292 @@ plot_disp_sociality = plot_disp_sociality + theme(legend.position = "none")
 plot_rda_all + plot_disp_sociality # A + B
 plot_disp_soc # C
 
-################ DIFFERENTIAL ABUNDANCE ################
+################ PROSOCIAL MICROBES ################
 
-##### setup #####
+#### bifido ####
 
-# all hosts
-df_metadata_sub_da = df_metadata_sub %>% 
-  filter(basic_sociality != "intermediate") %>% # exclude intermediate sociality
-  column_to_rownames("sample_id") # bring rownames back
+#### _ occurrence ####
+# 1) is there a difference in occurrence of Bifido & Lacto by sociality level?
 
-# subsample otu table
-common_samples_sub_da = intersect(rownames(mx_otus), rownames(df_metadata_sub_da))
+# extract abundance data for all Bifidobacterium OTUs
+bifido_data <- df_otus_sub[, ls_bifido]
 
-df_otus_sub_da = df_otus_sub %>%
-  rownames_to_column() %>%
-  filter(rowname %in% common_samples_sub_da) %>% 
-  column_to_rownames("rowname") %>%
-  select(where(~ sum(.) != 0))
+# check dimensions
+cat("Number of Bifidobacterium OTUs:", ncol(bifido_data), "\n") # 14
+cat("Number of samples:", nrow(bifido_data), "\n") # 375
 
-# mammals
-df_metadata_sub_mammals_da = df_metadata_sub %>% 
-  filter(basic_sociality != "intermediate") %>%
-  filter(host_class == "c__Mammalia") %>% 
-  column_to_rownames("sample_id")
+# sum across all Bifidobacterium OTUs per sample
+total_bifido <- rowSums(bifido_data)
 
-common_samples_sub_mammals_da = intersect(rownames(mx_otus), rownames(df_metadata_sub_mammals_da))
+# create dataframe
+bifido_analysis <- data.frame(
+  sample_id = rownames(df_otus_sub),
+  sociality = df_metadata_sub$basic_sociality,
+  host_species = df_metadata_sub$host_scientific_name,
+  total_bifido = total_bifido,
+  total_reads = rowSums(df_otus_sub)
+) %>%
+  mutate(
+    bifido_rel_abundance = total_bifido / total_reads,
+    bifido_present = total_bifido > 0
+  )
 
-df_otus_sub_mammals_da = df_otus_sub %>%
-  rownames_to_column() %>%
-  filter(rowname %in% common_samples_sub_mammals_da) %>% 
-  column_to_rownames("rowname") %>%
-  select(where(~ sum(.) != 0))
+# summary stats
+cat("\n=== Bifidobacterium Summary ===\n")
+bifido_analysis %>%
+  group_by(sociality) %>%
+  summarise(
+    n = n(),
+    mean_abundance = mean(total_bifido),
+    median_abundance = median(total_bifido),
+    prevalence = sum(bifido_present) / n() * 100,
+    .groups = "drop"
+  ) %>%
+  print()
 
-# birds
-df_metadata_sub_birds_da = df_metadata_sub %>% 
-  filter(basic_sociality != "intermediate") %>%
-  filter(host_class == "c__Aves") %>% 
-  column_to_rownames("sample_id")
+# test if presence/absence differs (not just abundance)
+bifido_prevalence_data <- bifido_analysis %>%
+  group_by(sociality) %>%
+  summarise(
+    n = n(),
+    n_present = sum(bifido_present),
+    prevalence = n_present / n * 100
+  )
 
-common_samples_sub_birds_da = intersect(rownames(mx_otus), rownames(df_metadata_sub_birds_da))
+cat("\n=== Prevalence by Group ===\n")
+print(prevalence_data)
 
-df_otus_sub_birds_da = df_otus_sub %>%
-  rownames_to_column() %>%
-  filter(rowname %in% common_samples_sub_birds_da) %>% 
-  column_to_rownames("rowname") %>%
-  select(where(~ sum(.) != 0))
+# log-transform for normality
+bifido_analysis$log_bifido <- log(bifido_analysis$bifido_rel_abundance + 1e-6)
 
-# run this on the server only
-# all hosts
-v_social_da = df_metadata_sub_da %>% pull(basic_sociality)
-social_clr = aldex.clr(t(df_otus_sub_da), v_social_da, mc.samples = 200) #basic_sociality is a character vector, so aldex sorts it alphabetically -> social is the reference group
-social_ttest = aldex.ttest(social_clr) #do not run on laptop
-aldex_social_effect = aldex.effect(social_clr, CI = TRUE)
-social_aldex_all = data.frame(social_ttest, aldex_social_effect)
-social_aldex_all = social_aldex_all %>% rownames_to_column()
+mod_occurrence_bifido <- pglmm(
+  log_bifido ~ sociality + (1|host_species),
+  data = bifido_analysis,
+  family = "gaussian",
+  cov_ranef = list(host_species = host_phylo)
+)
 
-# mammals
-v_social_da_mammals = df_metadata_sub_mammals_da %>% pull(basic_sociality)
-social_clr_mammals = aldex.clr(t(df_otus_sub_mammals_da), v_social_da_mammals, mc.samples = 200)
-social_ttest_mammals = aldex.ttest(social_clr_mammals)
-aldex_social_effect_mammals = aldex.effect(social_clr_mammals, CI = TRUE)
-social_aldex_mammals = data.frame(social_ttest_mammals, aldex_social_effect_mammals)
-social_aldex_mammals = social_aldex_mammals %>% rownames_to_column()
+print(summary(mod_occurrence_bifido))
 
-# birds
-v_social_da_birds = df_metadata_sub_birds_da %>% pull(basic_sociality)
-social_clr_birds = aldex.clr(t(df_otus_sub_birds_da), v_social_da_birds, mc.samples = 200)
-social_ttest_birds = aldex.ttest(social_clr_birds)
-aldex_social_effect_birds = aldex.effect(social_clr_birds, CI = TRUE)
-social_aldex_birds = data.frame(social_ttest_birds, aldex_social_effect_birds)
-social_aldex_birds = social_aldex_birds %>% rownames_to_column()
+#### _ rel ab ####
+# 2) is there a difference in within-sample relative abundance of Bifido & Lacto by sociality level?
 
-write_csv(social_aldex_all, "social_aldex_all.csv")
-write_csv(social_aldex_mammals, "social_aldex_mammals.csv")
-write_csv(social_aldex_birds, "social_aldex_birds.csv")
+# calculate relative abundance per sample
+bifido_rel_data <- data.frame(
+  sample_id = rownames(df_otus_sub),
+  sociality = df_metadata_sub$basic_sociality,
+  host_species = df_metadata_sub$host_scientific_name,
+  bifido_count = rowSums(df_otus_sub[, ls_bifido]),
+  total_count = rowSums(df_otus_sub)
+) %>%
+  mutate(
+    bifido_rel_abundance = (bifido_count / total_count) * 100,  # As percentage
+    bifido_present = bifido_count > 0
+  )
 
-save(social_aldex_all, social_aldex_mammals, social_aldex_birds, file = "diff_ab_data.RData")
+# log-transform + add small constant for zeroes
+bifido_rel_data$log_rel_abund <- log(bifido_rel_data$bifido_rel_abundance + 0.01)
 
-#### data input #####
-social_aldex_all = read_csv("social_aldex_all.csv")
-social_aldex_mammals = read_csv("social_aldex_mammals.csv")
-social_aldex_birds = read_csv("social_aldex_birds.csv")
+# run PGLMM
+mod_rel_abund <- pglmm(
+  log_rel_abund ~ sociality + (1|host_species),
+  data = bifido_rel_data,
+  family = "gaussian",
+  cov_ranef = list(host_species = host_phylo)
+)
 
-#### plots #####
-par(mfrow = c(1,2))
-aldex.plot(social_aldex_all, type = "MA", test = "welch", main = "MA plot")
-aldex.plot(social_aldex_all, type = "MW", test = "welch", main = "effect plot")
+cat("\n=== PGLMM on relative abundance of Bifidobacterium OTUs ===\n")
+print(summary(mod_rel_abund))
 
-# identify OTUs by name
-taxonomy_table = p_tax %>% as.data.frame() %>% rownames_to_column()
 
-# generate df of differentially abundant OTUs
-social_diff_asvs_mammals = social_aldex_mammals %>% 
-  filter(we.eBH < 0.001) %>% 
-  rownames_to_column("...1") %>% 
-  left_join(taxonomy_table, by = "rowname") %>% # add ASV taxonomical info
-  replace_na(list(genus = "")) %>%
-  replace_na(list(species = "sp.")) %>%
-  mutate(across(c("genus"), substr, 6, nchar(genus))) %>% 
-  mutate(across(c("species"), substr, 6, nchar(species))) %>% 
-  mutate(ci_product = effect.low * effect.high ) %>% #column that returns TRUE if CI does not contain 0# %>% 
-  mutate(ci_no_zero = ci_product > 0) #returns TRUE if CI does not include zero
+#### limosilactobacillus ####
+#### _ occurrence ####
 
-social_diff_asvs_mammals %>% 
-  ggplot(aes(x = effect, y = reorder(species, (effect*-1)), colour = phylum)) +
-  geom_point(size = 2.5) +
-  scale_colour_viridis_d(labels = c("Actinobacteria", "Bacteroidetes", "Firmicutes", "Proteobacteria")) +
-  xlab("effect size") +
-  ylab("OTU") +
-  theme(axis.text.y = element_text(face = "italic"),
-        text = element_text(size = 14)) +
-  #ggtitle("Differentially abundant OTUs in mammals,\nsocial v solitary\n(BH-corrected)") + 
-  geom_vline(xintercept = 0, linetype = "dotted")
-# since social is the reference group, effect < 0 means OTU is higher in social
+# extract abundance data for all Bifidobacterium OTUs
+lacto_data <- df_otus_sub[, ls_lacto]
 
-# birds
-social_diff_asvs_birds = social_aldex_birds %>%
-  filter(we.eBH < 0.05) %>% #we.eBH = expected Benjamini-Hochberg corrected p-value of Welch’s t test (higher p still yields 0 differentially abundant OTUs)
-  rownames_to_column("...1") %>% 
-  left_join(taxonomy_table, by = "rowname") %>% # add ASV taxonomical info
-  replace_na(list(genus = "")) %>%
-  replace_na(list(species = "sp.")) %>%
-  mutate(otu_scientific_name = paste(genus, species, sep = " ")) %>% #concatenate to full ASV name
-  mutate(otu_scientific_name = str_trim(otu_scientific_name, side = "left")) %>%
-  mutate(otu_scientific_name = as.factor(otu_scientific_name)) %>% 
-  mutate(ci_product = effect.low * effect.high ) %>% #column that returns TRUE if CI does not contain 0# %>% 
-  mutate(ci_no_zero = ci_product > 0) #returns TRUE if CI does not include zero
-#there are no differentially abundant OTUs in birds
+# check dimensions
+cat("Number of (Limosi)lactobacillus OTUs:", ncol(lacto_data), "\n") # 226
+cat("Number of samples:", nrow(lacto_data), "\n") # 375
+
+# sum across all (Limosi)lactobacillus OTUs per sample
+total_lacto <- rowSums(lacto_data)
+
+# create dataframe
+lacto_analysis <- data.frame(
+  sample_id = rownames(df_otus_sub),
+  sociality = df_metadata_sub$basic_sociality,
+  host_species = df_metadata_sub$host_scientific_name,
+  total_lacto = total_lacto,
+  total_reads = rowSums(df_otus_sub)
+) %>%
+  mutate(
+    lacto_rel_abundance = total_lacto / total_reads,
+    lacto_present = total_lacto > 0
+  )
+
+# summary stats
+cat("\n=== Lactobacillus Summary ===\n")
+lacto_analysis %>%
+  group_by(sociality) %>%
+  summarise(
+    n = n(),
+    mean_abundance = mean(total_lacto),
+    median_abundance = median(total_lacto),
+    prevalence = sum(lacto_present) / n() * 100,
+    .groups = "drop"
+  ) %>%
+  print()
+
+# test if presence/absence differs (not just abundance)
+lacto_prevalence_data <- lacto_analysis %>%
+  group_by(sociality) %>%
+  summarise(
+    n = n(),
+    n_present = sum(lacto_present),
+    prevalence = n_present / n * 100
+  )
+
+cat("\n=== Prevalence by Group ===\n")
+print(prevalence_data)
+
+# log-transform for normality
+lacto_analysis$log_lacto <- log(lacto_analysis$lacto_rel_abundance + 1e-6)
+
+mod_occurrence_lacto <- pglmm(
+  log_lacto ~ sociality + (1|host_species),
+  data = lacto_analysis,
+  family = "gaussian",
+  cov_ranef = list(host_species = host_phylo)
+)
+
+print(summary(mod_occurrence_lacto))
+
+#### _ rel ab ####
+
+# calculate relative abundance per sample
+lacto_rel_data <- data.frame(
+  sample_id = rownames(df_otus_sub),
+  sociality = df_metadata_sub$basic_sociality,
+  host_species = df_metadata_sub$host_scientific_name,
+  lacto_count = rowSums(df_otus_sub[, ls_lacto]),
+  total_count = rowSums(df_otus_sub)
+) %>%
+  mutate(
+    lacto_rel_abundance = (lacto_count / total_count) * 100,  # As percentage
+    lacto_present = lacto_count > 0
+  )
+
+# log-transform + add small constant for zeroes
+lacto_rel_data$log_rel_abund <- log(lacto_rel_data$lacto_rel_abundance + 0.01)
+
+# run PGLMM
+mod_rel_abund <- pglmm(
+  log_rel_abund ~ sociality + (1|host_species),
+  data = lacto_rel_data,
+  family = "gaussian",
+  cov_ranef = list(host_species = host_phylo)
+)
+
+cat("\n=== PGLMM on relative abundance of lactobacterium OTUs ===\n")
+print(summary(mod_rel_abund))
+
+#### plots ####
+
+# plot Bifido prevalence: % of samples in each social group that contain Bifidobacterium (ie, have abundance > 0)
+plot_bifido_prev = ggplot(bifido_prevalence_data, aes(x = sociality, y = prevalence, fill = sociality)) +
+  geom_bar(stat = "identity", alpha = 0.8) +
+  geom_text(aes(label = paste0(round(prevalence, 1), "%")), 
+            vjust = -0.5, size = 4) +
+  scale_fill_manual(
+    values = c("social" = "#440154FF", 
+               "intermediate" = "#21908CFF", 
+               "solitary" = "#FDE725FF")
+  ) +
+  ylim(0, 20) +
+  labs(
+    #title = expression(italic("Bifidobacterium")~"prevalence"),
+    x = "Sociality",
+    #y = expression(italic("Bifidobacterium") ~ "prevalence (%)"),
+    y = "Prevalence (%)") +
+  theme_classic(base_size = 12) +
+  theme(legend.position = "none") +
+  ggtitle("A")
+
+plot_bifido_prev
+
+# plot Bifido relative abundance per sociality level
+plot_bifido_relab = ggplot(bifido_rel_data, aes(x = sociality, y = log_rel_abund, fill = sociality)) +
+  geom_violin(alpha = 0.8) +
+  geom_jitter(width = 0.15, alpha = 0.5, size = 2) +
+  scale_fill_manual(
+    values = c("social" = "#440154FF", 
+               "intermediate" = "#21908CFF", 
+               "solitary" = "#FDE725FF")
+  ) +
+  labs(
+    #title = expression(italic("Bifidobacterium")~"relative abundance"),
+    x = "Sociality",
+    #y = expression(italic("Bifidobacterium")~"relative abundance (log scale)")) +
+    y = "Relative abundance (log)") +
+  theme_classic(base_size = 12) +
+  theme(legend.position = "none") +
+  ggtitle("B")
+
+plot_bifido_relab
+
+# plot Lacto prevalence: % of samples in each social group that contain Lactobacillus
+plot_lacto_prev = ggplot(lacto_prevalence_data, aes(x = sociality, y = prevalence, fill = sociality)) +
+  geom_bar(stat = "identity", alpha = 0.8) +
+  geom_text(aes(label = paste0(round(prevalence, 1), "%")), 
+            vjust = -0.5, size = 4) +
+  scale_fill_manual(
+    values = c("social" = "#440154FF", 
+               "intermediate" = "#21908CFF", 
+               "solitary" = "#FDE725FF")
+  ) +
+  ylim(0, 85) +
+  labs(
+    #title = expression(italic("Limosilactobacillus")~"prevalence"),
+    x = "Sociality",
+    #y = expression(italic("Limosilactobacillus") ~ "prevalence (%)")) +
+    y = "Prevalence (%)") +
+  theme_classic(base_size = 12) +
+  theme(legend.position = "none") +
+  ggtitle("C")
+
+plot_lacto_prev
+
+# plot Lactobacillus relative abundance per sociality level
+plot_lacto_relab = ggplot(lacto_rel_data, aes(x = sociality, y = log_rel_abund, fill = sociality)) +
+  geom_violin(alpha = 0.8) +
+  geom_jitter(width = 0.15, alpha = 0.5, size = 2) +
+  scale_fill_manual(
+    values = c("social" = "#440154FF", 
+               "intermediate" = "#21908CFF", 
+               "solitary" = "#FDE725FF")
+  ) +
+  labs(
+    #title = expression(italic("Limosilactobacillus")~"relative abundance"),
+    x = "Sociality",
+    #y = expression(italic("Limosilactobacillus")~"relative abundance (log scale)")) +
+    y = "Relative abundance (log)") +
+  theme_classic(base_size = 12) +
+  theme(legend.position = "none") +
+  ggtitle("D")
+
+plot_lacto_relab
+
+# combine plots
+plot_prosocials <- ggarrange(plot_bifido_prev, plot_bifido_relab, plot_lacto_prev, plot_lacto_relab, ncol = 2, nrow = 2)
+
+# add column titles for Bifido + Limosilacto
+plot_prosocials <- annotate_figure(
+  plot_prosocials,
+  top = text_grob(
+    expression(italic("Bifidobacterium") ~ "                                      " ~ italic("Limosilactobacillus")),
+    size = 14
+  )
+)
+
+plot_prosocials
