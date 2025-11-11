@@ -199,7 +199,6 @@ print(cor_test_chao1) # rho = 0.07753251, p = 0.134
 print(cor_test_shannon) # rho = 0.02837319, p = 0.5837
 print(cor_test_obs_otus) # rho = 0.03908144, p = 0.4505
 
-
 # plot
 plot_depth_adiv_obs = ggplot(depth_alpha, aes(x = depth, y = adiv_obs_otus)) +
   geom_point(alpha = 0.6) +
