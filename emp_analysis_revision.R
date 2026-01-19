@@ -402,7 +402,8 @@ df_otus_sub %>%
   sum() # 59335
 # Limosilact: 59335/13085267*100 = 0.4534489 % of sequences
 
-#### relative abundances ####  
+#### Fig 1  ####  
+# relative abundances
 # all hosts
 # normalize number of reads using median sequencing depth
 total = median(sample_sums(ps_sub))
@@ -423,8 +424,8 @@ relab_mammals_df = relab_mammals_df %>%
 
 plot_relab_mammals = ggplot(relab_mammals_df, aes(x = Sample, y = Abundance, fill = Phylum)) +
   geom_bar(stat = "identity", position = "stack") +
-  xlab("sample") +
-  ylab("relative abundance") +
+  xlab("Sample") +
+  ylab("Relative abundance") +
   theme(axis.text.x = element_blank(),
         text = element_text(size = 14)) +
   scale_fill_discrete(labels = c("Actinobacteria", "Bacteroidetes", "Cyanobacteria", "Euryarchaeota", "Firmicutes", "Lentisphaerae", "Proteobacteria", "Spirochaetae",  "Tenericutes", "Verrucomicrobia", "Other")) +
@@ -475,6 +476,9 @@ plot_relab_birds = ggplot(relab_birds_df, aes(x = Sample, y = Abundance, fill = 
   ggtitle("B (birds)")
 
 plot_relab_birds
+
+# Fig 1 combined
+plot_relab_mammals / plot_relab_birds
 
 #### dominant taxa #### 
 # all hosts
