@@ -672,7 +672,8 @@ disp_data %>%
   scale_y_continuous(limits = c(0, 100), breaks = seq(0, 140, by = 20)) +
   geom_text(data = disp_data, aes(host_scientific_name, Inf, label = n), hjust = "inward") +
   labs(x = "Host species", y = "Distance from centroid") +
-  theme(text = element_text(size = 14),
+  theme_classic() +
+  theme(text = element_text(size = 20),
         axis.text.y = element_text(face = "italic")) +
   guides(fill = guide_legend(reverse = TRUE)) +
   coord_flip()
@@ -847,7 +848,7 @@ plot_rda_all = rda_scores %>%
     y = "CAP2 (0.29%)"
   ) +
   ggtitle("A") +
-  theme_classic(base_size = 14)
+  theme_classic(base_size = 20)
 
 plot_rda_all
 
@@ -1018,7 +1019,7 @@ plot_disp_sociality <- ggplot() +
     y = "PCoA2",
     title = "B") +
   # theme
-  theme_classic(base_size = 14)
+  theme_classic(base_size = 20)
 
 plot_disp_sociality
 
@@ -1043,7 +1044,7 @@ plot_disp_soc_boxplot = disp_soc_data %>%
               map_signif_level = TRUE,
               annotations = "***",
               y_position = c(80, 92)) +
-  theme_classic(base_size = 14) +
+  theme_classic(base_size = 20) +
   ggtitle("C")
 
 plot_disp_soc_boxplot
@@ -1108,7 +1109,7 @@ bifido_prevalence_data <- bifido_analysis %>%
   )
 
 cat("\n=== Prevalence by Group ===\n")
-print(prevalence_data)
+print(bifido_prevalence_data)
 
 # create binary variable for presence/absence
 bifido_analysis$presence <- ifelse(bifido_analysis$bifido_rel_abundance > 0, 1, 0)
@@ -1202,7 +1203,7 @@ lacto_prevalence_data <- lacto_analysis %>%
   )
 
 cat("\n=== Prevalence by Group ===\n")
-print(prevalence_data)
+print(lacto_prevalence_data)
 
 # create binary variable for presence/absence
 lacto_analysis$presence <- ifelse(lacto_analysis$lacto_rel_abundance > 0, 1, 0)
@@ -1257,13 +1258,13 @@ plot_bifido_prev = ggplot(bifido_prevalence_data, aes(x = sociality, y = prevale
                "intermediate" = "#21908CFF", 
                "solitary" = "#FDE725FF")
   ) +
-  ylim(0, 20) +
+  ylim(0, 25) +
   labs(
     #title = expression(italic("Bifidobacterium")~"prevalence"),
     x = "Sociality",
     #y = expression(italic("Bifidobacterium") ~ "prevalence (%)"),
     y = "Prevalence (%)") +
-  theme_classic(base_size = 12) +
+  theme_classic(base_size = 20) +
   theme(legend.position = "none") +
   ggtitle("A")
 
@@ -1283,7 +1284,7 @@ plot_bifido_relab = ggplot(bifido_rel_data, aes(x = sociality, y = log_rel_abund
     x = "Sociality",
     #y = expression(italic("Bifidobacterium")~"relative abundance (log scale)")) +
     y = "Relative abundance (log)") +
-  theme_classic(base_size = 12) +
+  theme_classic(base_size = 20) +
   theme(legend.position = "none") +
   ggtitle("B")
 
@@ -1293,7 +1294,7 @@ plot_bifido_relab
 plot_lacto_prev = ggplot(lacto_prevalence_data, aes(x = sociality, y = prevalence, fill = sociality)) +
   geom_bar(stat = "identity", alpha = 0.8) +
   geom_text(aes(label = paste0(round(prevalence, 1), "%")), 
-            vjust = -0.5, size = 4) +
+            vjust = -0.5, size = 6) +
   scale_fill_manual(
     values = c("social" = "#440154FF", 
                "intermediate" = "#21908CFF", 
@@ -1305,7 +1306,7 @@ plot_lacto_prev = ggplot(lacto_prevalence_data, aes(x = sociality, y = prevalenc
     x = "Sociality",
     #y = expression(italic("Limosilactobacillus") ~ "prevalence (%)")) +
     y = "Prevalence (%)") +
-  theme_classic(base_size = 12) +
+  theme_classic(base_size = 20) +
   theme(legend.position = "none") +
   ggtitle("C")
 
@@ -1325,7 +1326,7 @@ plot_lacto_relab = ggplot(lacto_rel_data, aes(x = sociality, y = log_rel_abund, 
     x = "Sociality",
     #y = expression(italic("Limosilactobacillus")~"relative abundance (log scale)")) +
     y = "Relative abundance (log)") +
-  theme_classic(base_size = 12) +
+  theme_classic(base_size = 20) +
   theme(legend.position = "none") +
   ggtitle("D")
 
