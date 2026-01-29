@@ -112,7 +112,7 @@ plot_relab_birds
 plot_relab_mammals / plot_relab_birds
 
 #### Fig 2 ####
-sociality_order = c("solitary", "intermediate", "social")
+sociality_order = c("social", "intermediate", "solitary")
 df_metadata_sub$basic_sociality = factor(df_metadata_sub$basic_sociality, levels = sociality_order)
 
 p_adiv_obs = df_metadata_sub %>%
